@@ -143,4 +143,10 @@ struct GpioOps
     void (*interrupt)(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler);
 };
 
+/*Brief:
+* [in] - none
+* [out] - pointer to gpio operations
+* */
+const GpioOps_t* GpioGetOps(void);
+
 #endif /* GPIO_H */

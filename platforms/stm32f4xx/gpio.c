@@ -511,7 +511,7 @@ void EXTI15_10_IRQHandler(void)
 }
 
 /* Gpio operations */
-const GpioOps_t g_GpioOps = {
+static const GpioOps_t m_GpioOps = {
     .open = &GpioOpen,
     .close = &GpioClose,
     .read = &GpioRead,
@@ -519,3 +519,8 @@ const GpioOps_t g_GpioOps = {
     .toggle = &GpioToggle,
     .interrupt = &GpioSetInterrupt
 };
+
+const GpioOps_t* GpioGetOps(void)
+{
+    return &m_GpioOps;
+}
