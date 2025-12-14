@@ -1,24 +1,35 @@
+#include <stddef.h>
+
+#include "custom-assert.h"
 #include "led.h"
 
-extern const GpioOps_t g_GpioOps;
-
-void LedInit(Led_t* led)
+void LedInit(Led_t* const led, GpioHandle_t* const gpio, uint8_t pin)
 {
-    led->gpio->ops = &g_GpioOps;
+    ASSERT(led != NULL);
+
+    led->gpio = gpio;
+
+    led->gpio->ops->open(led->gpio, pin, PIN_MODE_OUTPUT, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_STATE_LOW);
 }
 
-void LedOn(Led_t* led)
+void LedOn(const Led_t* const led)
 {
-    led->gpio->ops->write();
+    ASSERT(led != NULL);
+
+    led->gpio->ops->write(led->gpio, PIN_STATE_HIGH);
 }
 
-void LedOff(Led_t* led)
+void LedOff(const Led_t* const led)
 {
-    led->gpio->ops->write();
+    ASSERT(led != NULL);
+
+    led->gpio->ops->write(led->gpio, PIN_STATE_LOW);
 }
 
-void LedToggle(Led_t* led)
+void LedToggle(const Led_t* const led)
 {
-    led->gpio->ops->toggle();
+    ASSERT(led != NULL);
+
+    led->gpio->ops->toggle(led->gpio);
 }
 
