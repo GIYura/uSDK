@@ -20,7 +20,7 @@ Each MCU has its own folder under `platforms/`:
 
 `MCU/`
 - gpio.c — MCU specific gpio implementation
-- gpio-name.h - MCU gpio naming
+- gpio-name.h — MCU gpio naming
 
 `boot/` — platform-specific startup and linker script files
 
@@ -42,6 +42,7 @@ Device drivers on top of HAL:
 | `sx126x/`     | LoRa transceiver driver        |
 | `radio/`      | Abstract radio interface       |
 | `pwm/`        | PWM built on HAL timers        |
+| `led/`        | LED driver                     |
 
 
 ### services/
@@ -51,8 +52,19 @@ Device drivers on top of HAL:
 | `log/`    | UART-based logger  |
 | `cli/`    | Command line shell |
 
+- uart-service.h — UART service interface
+- uart-service.c — UART service implementation
 
-## 4. Core Components
+## 4. Board support package
+
+Each MCU has its own folder under `bsp/`:
+
+| Directory       |  Description                                    |
+|-----------------|-------------------------------------------------|
+| `stm32f4xx/`    | stm32f411 nucleo board specific implementation  |
+| `cc32xx/`       | cc3220 launchxl board specific implementation   |
+
+## 5. Core Components
 
 System-level functionality:
 
@@ -60,7 +72,7 @@ System-level functionality:
 - **mpu/** — memory protection utilities  
 - **custom-assert/** — project-wide assert system  
 
-## 5. Utility Modules
+## 6. Utility Modules
 
 Standalone helpers:
 
@@ -68,4 +80,3 @@ Standalone helpers:
 - **delay/** — blocking delay functions  
 - **event/** — event queue system  
 - **utils/** — macros, helpers, small utilities  
-
