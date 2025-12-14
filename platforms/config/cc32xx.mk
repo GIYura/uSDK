@@ -23,6 +23,10 @@ LINKER_SCRIPT = $(SUBMODULES)/platforms/boot/cc32xx/cc32xx.ld
 ##############################################
 DEFINES += -Dgcc -D$(MCU)
 
+ifeq ($(PLATFORM),cc32xx)
+DEFINES += -DPLATFORM_CC3220
+endif
+
 ##############################################
 # Include directories
 ##############################################
@@ -31,7 +35,8 @@ PLATFORM_DIRS = \
     $(TI_SDK)/source/ti/devices/cc32xx \
     $(TI_SDK)/source/ti/devices/cc32xx/inc \
     $(TI_SDK)/source/ti/devices/cc32xx/driverlib \
-    $(SUBMODULES)/platforms/cc32xx
+    $(SUBMODULES)/platforms/cc32xx \
+    $(SUBMODULES)/bsp/cc32xx
 
 ##############################################
 # START-UP

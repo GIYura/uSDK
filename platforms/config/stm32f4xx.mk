@@ -23,13 +23,18 @@ LINKER_SCRIPT = $(SUBMODULES)/platforms/boot/stm32f4xx/stm32f4xx.ld
 ##############################################
 DEFINES += -D$(MCU)
 
+ifeq ($(PLATFORM),stm32f4xx)
+DEFINES += -DPLATFORM_STM32F4
+endif
+
 ##############################################
 # Include directories
 ##############################################
 PLATFORM_DIRS = \
     $(STM32_SDK)/Drivers/CMSIS/Device/ST/STM32F4xx/Include \
     $(STM32_SDK)/Drivers/CMSIS/Include \
-    $(SUBMODULES)/platforms/stm32f4xx
+    $(SUBMODULES)/platforms/stm32f4xx \
+    $(SUBMODULES)/bsp/stm32f4xx
 
 ##############################################
 # START-UP
