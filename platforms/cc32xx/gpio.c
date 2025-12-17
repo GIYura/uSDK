@@ -54,8 +54,15 @@ static const GpioMap_t m_GPIO_MAP[PIN_GPIO_MAX] = {
 
 static uint8_t GpioGetPinIndex(uint32_t base, uint8_t pinMask)
 {
-    /*TODO:*/
-    return 0;
+    for (uint8_t i = 0; i < PIN_GPIO_MAX; i++)
+    {
+        if (m_GPIO_MAP[i].base == base && m_GPIO_MAP[i].mask == pinMask)
+        {
+            return i;
+        }
+    }
+
+    return 0xFF;
 }
 
 static void GpioDisableClocks(uint32_t base)
@@ -163,7 +170,7 @@ static uint32_t GpioMapPinType(PIN_TYPES pull, PIN_CONFIGS cfg)
     }
 }
 
-static uint32_t GpioMapEdge(PIN_IRQ_MODES mode)
+static uint8_t GpioMapEdge(PIN_IRQ_MODES mode)
 {
     switch (mode)
     {
@@ -188,41 +195,32 @@ static uint8_t GpioMapInterruptPriority(uint8_t priority)
     {
         case 0:
             return INT_PRIORITY_LVL_0;
-            break;
 
         case 1:
             return INT_PRIORITY_LVL_1;
-            break;
 
         case 2:
             return INT_PRIORITY_LVL_2;
-            break;
 
         case 3:
             return INT_PRIORITY_LVL_3;
-            break;
 
         case 4:
             return INT_PRIORITY_LVL_4;
-            break;
 
         case 5:
             return INT_PRIORITY_LVL_5;
-            break;
 
         case 6:
             return INT_PRIORITY_LVL_6;
-            break;
 
         case 7:
             return INT_PRIORITY_LVL_7;
-            break;
 
         default:
             /* never reach here */
             ASSERT(false);
             return 0xFF;
-            break;
     }
 }
 
@@ -261,6 +259,7 @@ static void GpioOpen(GpioHandle_t* const handle,
               PIN_CONFIGS config,
               uint32_t value)
 {
+    /*TODO: map alternate function */
     ASSERT(handle != NULL);
     ASSERT(handle->ops != NULL);
     ASSERT(pin < PIN_GPIO_MAX);
@@ -321,6 +320,7 @@ static void GpioOpen(GpioHandle_t* const handle,
 
 static void GpioClose(GpioHandle_t* const handle)
 {
+    /*TODO*/
     if ((handle == NULL) || (handle->ops != NULL))
     {
         return;
@@ -379,6 +379,8 @@ static void GpioToggle(const GpioHandle_t* const handle)
 
     uint32_t base = handle->gpio.cc3220.base;
     uint8_t pinMask = handle->gpio.cc3220.pinMask;
+
+    /*TODO: how to make it atomic??? */
 #if 0
     uint32_t primask = __get_PRIMASK();
     __disable_irq();
@@ -393,13 +395,48 @@ static void GpioToggle(const GpioHandle_t* const handle)
 #endif
 }
 
+static void GPIO_IRQ_Handler(void)
+{
+    /*TODO: probably split up to port specific handler */
+    GpioHandle_t* handle = NULL;
+
+    for (uint8_t i = 0; i < PIN_GPIO_MAX; i++)
+    {
+        handle = m_GpioIrq[i];
+        if (handle == NULL)
+        {
+            continue;
+        }
+
+        uint32_t base = handle->gpio.cc3220.base;
+        uint8_t mask = handle->gpio.cc3220.pinMask;
+
+        uint32_t status = GPIOIntStatus(base, true);
+
+        if (status & mask)
+        {
+            GPIOIntClear(base, mask);
+
+            if (handle->irqHandler != NULL)
+            {
+                (*handle->irqHandler)();
+            }
+        }
+    }
+}
+
 static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler)
 {
-    /* TODO: */
     ASSERT(handle != NULL);
+    ASSERT(handler != NULL);
     ASSERT(handle->ops != NULL);
 
     if (mode == PIN_IRQ_NONE)
+    {
+        return;
+    }
+
+    if (!handle->initialized)
     {
         return;
     }
@@ -409,27 +446,12 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
     uint8_t pinIndex = GpioGetPinIndex(base, pinMask);
     uint8_t intPriority = GpioMapInterruptPriority(priority);
     uint8_t intNum = GpioMapInterrupt(base);
+    uint8_t edge = GpioMapEdge(mode);
 
-    handle->irqHandler = handler;
+    ASSERT(pinIndex != 0xFF);
+    ASSERT(intPriority != 0xFF);
+    ASSERT(intNum != 0xFF);
 
-    GPIOIntDisable(base, pinMask);
-    GPIOIntClear(base, pinMask);
-
-    uint32_t edge = GpioMapEdge(mode);
-
-    GPIOIntTypeSet(base, pinMask, edge);
-
-    GPIOIntClear(base, pinMask);
-
-    GPIOIntEnable(base, pinMask);
-
-    IntPrioritySet(intNum, intPriority);
-
-    IntRegister(intNum, handler);
-
-    IntEnable(intNum);
-
-#if 0
     for (uint8_t i = 0; i < PIN_GPIO_MAX; i++)
     {
         if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.cc3220.pinIndex == pinIndex)
@@ -437,7 +459,23 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
             return;
         }
     }
-#endif
+
+    handle->irqHandler = handler;
+    handle->gpio.cc3220.pinIndex = pinIndex;
+    m_GpioIrq[pinIndex] = handle;
+
+    GPIOIntDisable(base, pinMask);
+    GPIOIntClear(base, pinMask);
+
+    GPIOIntTypeSet(base, pinMask, edge);
+
+    GPIOIntEnable(base, pinMask);
+
+    IntPrioritySet(intNum, intPriority);
+
+    IntRegister(intNum, GPIO_IRQ_Handler);
+
+    IntEnable(intNum);
 }
 
 /* Gpio operations */
