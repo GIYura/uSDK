@@ -421,6 +421,11 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
     ASSERT(handler != NULL);
     ASSERT(handle->ops != NULL);
 
+    if (mode == PIN_IRQ_NONE)
+    {
+        return;
+    }
+
     if (!handle->initialized)
     {
         return;
