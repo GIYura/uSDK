@@ -3,8 +3,12 @@
 extern uint32_t _estack;
 extern uint32_t _sbss;
 extern uint32_t _ebss;
-extern uint32_t isr_vector;
 
+/*
+ * VTOR - Vector Table Offset Register
+ * Arm v7-M Architecture Reference Manual
+ * ARM DDI 0403E B3.2.2 System control and ID registers
+ * */
 #define SCB_VTOR (*(volatile uint32_t*)0xE000ED08)
 
 int main(void);
@@ -21,7 +25,8 @@ void Reset_Handler(void)
 {
     uint32_t* dst = &_sbss;
 
-    SCB_VTOR = (uint32_t)&isr_vector;
+    /* assign VTOR to vector table located in SRAM (see linker script cc32xx.ld)*/
+    SCB_VTOR = (uint32_t)g_pfnVectors;
 
     while (dst < &_ebss)
     {
