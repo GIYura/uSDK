@@ -28,6 +28,11 @@ DEFINES += -DPLATFORM_CC3220
 endif
 
 ##############################################
+# BOARD SUPPORT PACKAGE
+##############################################
+BSP = bsp
+
+##############################################
 # Include directories
 ##############################################
 PLATFORM_DIRS = \
@@ -36,7 +41,7 @@ PLATFORM_DIRS = \
     $(TI_SDK)/source/ti/devices/cc32xx/inc \
     $(TI_SDK)/source/ti/devices/cc32xx/driverlib \
     $(SUBMODULES)/platforms/cc32xx \
-    $(SUBMODULES)/bsp/cc32xx
+    $(BSP)/cc32xx
 
 ##############################################
 # START-UP

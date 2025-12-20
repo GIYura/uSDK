@@ -28,13 +28,18 @@ DEFINES += -DPLATFORM_STM32F4
 endif
 
 ##############################################
+# BOARD SUPPORT PACKAGE
+##############################################
+BSP = bsp
+
+##############################################
 # Include directories
 ##############################################
 PLATFORM_DIRS = \
     $(STM32_SDK)/Drivers/CMSIS/Device/ST/STM32F4xx/Include \
     $(STM32_SDK)/Drivers/CMSIS/Include \
     $(SUBMODULES)/platforms/stm32f4xx \
-    $(SUBMODULES)/bsp/stm32f4xx
+    $(BSP)/stm32f4xx
 
 ##############################################
 # START-UP
