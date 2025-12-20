@@ -11,7 +11,7 @@
 - startup_stm32f4xx.s - startup file
 - system_stm32f4xx.c - system source file
 
-#### atmega328
+#### nrf52
 
-- atmega328.ld - linker script
-- startup_atmega328.s - startup file
+- nrf52.ld - linker script
+- startup_nrf52.s - startup file
