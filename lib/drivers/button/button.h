@@ -19,9 +19,10 @@ typedef struct
 void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, uint8_t pin);
 
 /*Brief: Register button press handler
+ * [in] - button - pointer to button object
  * [in] - callback - callback function
  * [out] - none
  * */
-void ButtonRegisterPressHandler(ButtonEventHandler callback);
+void ButtonRegisterHandler(const Button_t* const button, ButtonEventHandler callback);
 
 #endif /* BUTTON_H */
