@@ -1,12 +1,8 @@
 #include "delay.h"
 #include "cmsis-device.h"
 
-/*
- * TODO:
- * 1. ticks should not be hard-coded
- * 2. for TI there should be SystemInit() analogue as for STM32
- * */
-#define TICKS_IN_US     16
+#define SYSTICK_FREQ_HZ     SystemCoreClock
+#define TICKS_IN_US         ((SYSTICK_FREQ_HZ) / 1000000U)
 
 void DelaySec(uint32_t sec)
 {
