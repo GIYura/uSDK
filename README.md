@@ -11,20 +11,17 @@ The `hal/include/` directory defines clean, MCU-agnostic APIs:
 
 - `uart.h` — UART interface  
 - `gpio.h` — GPIO interface
-- `i2c.h` — I2C interface  
-- `spi.h` — SPI interface  
+- `i2c.h` — I2C interface
+- `spi.h` — SPI interface
+- `timer.h` — timer interface
 
 ## 2. Platforms (MCU-Specific Implementations)
 
 Each MCU has its own folder under `platforms/`:
 
-`MCU/`
-- gpio.c — MCU specific gpio implementation
-- gpio-name.h — MCU gpio naming
+`MCU/` — MCU specific implementation
 
-`boot/` — platform-specific startup and linker script files
-
-`config/` — platform-specific makefiles
+`boot/MCU` — platform-specific startup and linker script files
 
 These files contain the actual register-level implementation of the HAL API.
 
@@ -43,6 +40,7 @@ Device drivers on top of HAL:
 | `radio/`      | Abstract radio interface       |
 | `pwm/`        | PWM built on HAL timers        |
 | `led/`        | LED driver                     |
+| `sw-timer/`   | SW timers                      |
 
 
 ### services/
