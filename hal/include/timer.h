@@ -4,12 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum
-{
-    ONE_SHOT = 0,
-    PERIODIC,
-} TIMER_MODES;
-
 typedef void (*TimerIrqHandler)(void);
 
 typedef struct TimerOps TimerOps_t;
@@ -24,7 +18,6 @@ typedef struct
     {
         void* instance;
         uint32_t timeoutMs;
-        TIMER_MODES mode;
     } timer;
 
     bool initialized;
@@ -39,7 +32,7 @@ struct TimerOps
 * [in] - mode - 0 - one shot; 1 - periodic
 * [out] - none
 * */
-    void (*open)(TimerHandle_t* const handle, uint32_t timeoutMs, TIMER_MODES mode);
+    void (*open)(TimerHandle_t* const handle, uint32_t timeoutMs);
 
 /*Brief: Timer start
 * [in] - handle - pointer to timer object
