@@ -6,11 +6,6 @@
 #include "custom-assert.h"
 #include "timer.h"
 
-#if 0
-NOTE: LSI frequency = 32 KHz
-TODO: either select LSE = 32.768 KHz, or adjust LSI (32000/16 = 2000 Hz)
-#endif
-
 #define RTC_WRITE_PROTECTION_KEY_1  ((uint8_t)0xCAU)
 #define RTC_WRITE_PROTECTION_KEY_2  ((uint8_t)0x53U)
 #define RTC_WUT_MAX                 (0xFFFFU)
@@ -97,16 +92,28 @@ static void RtcDisable(void)
     RCC->BDCR &= ~(RCC_BDCR_RTCEN);
 }
 
-static void LowSpeedEnable(void)
+static void LSI_Enable(void)
 {
     RCC->CSR |= RCC_CSR_LSION;
 
     while (!(RCC->CSR & RCC_CSR_LSIRDY));
 }
 
-static void LowSpeedDisable(void)
+static void LSI_Disable(void)
 {
     RCC->CSR &= ~RCC_CSR_LSION;
+}
+
+static void LSE_Enable(void)
+{
+    RCC->BDCR |= (RCC_BDCR_LSEON);
+
+    while (!(RCC->BDCR & RCC_BDCR_LSERDY));
+}
+
+static void LSE_Disable(void)
+{
+    RCC->BDCR &= ~(RCC_BDCR_LSEON);
 }
 
 static void RtcWakeupTimerEnable(RTC_TypeDef* const rtc)
@@ -134,7 +141,7 @@ static void RtcSetupClockSource(RTC_CLOCK_SOURCE source)
     ASSERT(source < RTC_CLOCK_SOURCE_COUNT);
 
     RCC->BDCR &= ~RCC_BDCR_RTCSEL;
-    RCC->BDCR |=  (RTC_CLOCKSOURCE_BITS[source] << RCC_BDCR_RTCSEL_Pos);
+    RCC->BDCR |= (RTC_CLOCKSOURCE_BITS[source] << RCC_BDCR_RTCSEL_Pos);
 }
 
 static void RtcWakeupClockSelection(RTC_TypeDef* const rtc, RTC_PRESCALER prescaler)
@@ -143,16 +150,6 @@ static void RtcWakeupClockSelection(RTC_TypeDef* const rtc, RTC_PRESCALER presca
 
     rtc->CR &= ~RTC_CR_WUCKSEL;
     rtc->CR |= (RTC_WUCKSEL_BITS[prescaler] << RTC_CR_WUCKSEL_Pos);
-}
-
-uint8_t RtcInitFlagCheck(RTC_TypeDef* const rtc)
-{
-    return ((rtc->ISR & RTC_ISR_INITF) == RTC_ISR_INITF);
-}
-
-uint8_t RtcSyncFlagChech(RTC_TypeDef* const rtc)
-{
-    return ((rtc->ISR & RTC_ISR_RSF) == RTC_ISR_RSF);
 }
 
 static uint32_t RtcCalcWakeupTicks(uint32_t timeoutMs, uint32_t freqHz)
@@ -179,18 +176,17 @@ static uint32_t RtcCalcWakeupTicks(uint32_t timeoutMs, uint32_t freqHz)
     return (ticks - 1U);
 }
 
-static void RtcOpen(TimerHandle_t* const handle, uint32_t timeout, TIMER_MODES mode)
+static void RtcOpen(TimerHandle_t* const handle, uint32_t timeout)
 {
     ASSERT(handle != NULL);
     ASSERT(handle->ops != NULL);
 
     handle->timer.instance = RTC;
-    handle->timer.mode = mode;
     handle->timer.timeoutMs = timeout;
     handle->initialized = false;
 
     RTC_TypeDef* rtc = handle->timer.instance;
-    uint8_t rtcPrescaler = RTC_PRESCALER_16;
+    uint8_t rtcPrescaler = RTC_PRESCALER_8;
 
     /* enable clock */
     RTC_CLOCK_ENABLE;
@@ -198,14 +194,14 @@ static void RtcOpen(TimerHandle_t* const handle, uint32_t timeout, TIMER_MODES m
     /* enable access to RTC and RTC Backup registers */
     BackupWriteProtectionEnable();
 
-    /* LSI RC oscillator ON */
-    LowSpeedEnable();
-
     /* Force backup domain reset */
     BackupReset();
 
-    /* Set RTC clock source to LSI */
-    RtcSetupClockSource(RTC_CLOCK_LSI);
+    /* LSE RC oscillator ON */
+    LSE_Enable();
+
+    /* Set RTC clock source to LSE */
+    RtcSetupClockSource(RTC_CLOCK_LSE);
 
     /* Enable the RTC */
     RtcEnable();
@@ -262,7 +258,7 @@ static void RtcClose(TimerHandle_t* const handle)
 
     BackupWriteProtectionDisable();
 
-    LowSpeedDisable();
+    LSE_Disable();
 
     /* Disable RTC */
     RtcDisable();
@@ -327,7 +323,6 @@ void RTC_WKUP_IRQHandler(void)
         }
     }
 }
-
 
 static void RtcSetInterrupt(TimerHandle_t* const handle, TimerIrqHandler handler)
 {
