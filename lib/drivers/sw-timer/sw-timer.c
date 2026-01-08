@@ -3,58 +3,47 @@
 #include "sw-timer.h"
 #include "custom-assert.h"
 
-#if 0
-/*
- * NOTE:
- * Current implementation uses 1 HW timer → 1 SW timer mapping.
- * This is intentional and used to validate RTC wakeup timer logic.
- * Will be extended to support multiple SW timers.
- */
-#endif
+#define SW_TIMER_MAX   16
 
-static SwTimer_t* g_swTimer = NULL;
+static SwTimer_t* m_swTimers[SW_TIMER_MAX] = { NULL };
 
-static void SwTimerIrq(void)
-{
-    ASSERT(g_swTimer != NULL);
-
-    if (g_swTimer->mode == PERIODIC)
-    {
-        g_swTimer->timer->ops->start(g_swTimer->timer);
-    }
-
-    if (g_swTimer->callback)
-    {
-        g_swTimer->callback();
-    }
-}
-
-void SwTimerInit(SwTimer_t* const swTimer, TimerHandle_t* const timer, uint32_t timeoutMs, TIMER_MODES mode)
+void SwTimerInit(SwTimer_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode)
 {
     ASSERT(swTimer != NULL);
 
-    swTimer->timer = timer;
+    swTimer->period = timeoutTicks;
+    swTimer->remaining = timeoutTicks;
     swTimer->mode = mode;
+    swTimer->active = false;
     swTimer->callback = NULL;
 
-    g_swTimer = swTimer;
+    /* register SW timer in table */
+    for (uint8_t i = 0; i < SW_TIMER_MAX; i++)
+    {
+        if (m_swTimers[i] == NULL)
+        {
+            m_swTimers[i] = swTimer;
+            return;
+        }
+    }
 
-    swTimer->timer->ops->open(swTimer->timer, timeoutMs, mode);
-    swTimer->timer->ops->interrupt(swTimer->timer, SwTimerIrq);
+    /* no free slot */
+    ASSERT(false);
 }
 
 void SwTimerStart(SwTimer_t* const swTimer)
 {
     ASSERT(swTimer != NULL);
 
-    swTimer->timer->ops->start(swTimer->timer);
+    swTimer->remaining = swTimer->period;
+    swTimer->active = true;
 }
 
 void SwTimerStop(SwTimer_t* const swTimer)
 {
     ASSERT(swTimer != NULL);
 
-    swTimer->timer->ops->close(swTimer->timer);
+    swTimer->active = false;
 }
 
 void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback)
@@ -64,3 +53,32 @@ void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback
     swTimer->callback = callback;
 }
 
+void SwTimerTick(void)
+{
+    for (uint8_t i = 0; i < SW_TIMER_MAX; i++)
+    {
+        SwTimer_t* t = m_swTimers[i];
+
+        if (!t || !t->active)
+        {
+            continue;
+        }
+
+        if (--t->remaining == 0)
+        {
+            if (t->callback)
+            {
+                t->callback();
+            }
+
+            if (t->mode == SW_TIMER_PERIODIC)
+            {
+                t->remaining = t->period;
+            }
+            else
+            {
+                t->active = false;
+            }
+        }
+    }
+}

@@ -3,23 +3,30 @@
 
 #include "timer.h"
 
+typedef enum
+{
+    SW_TIMER_ONE_SHOT = 0,
+    SW_TIMER_PERIODIC,
+} SW_TIMER_MODES;
+
 typedef void (*SwTimerHandler_t)(void);
 
 typedef struct
 {
-    TimerHandle_t* timer;
-    TIMER_MODES mode;
+    uint32_t period;        /* period in ticks */
+    uint32_t remaining;     /* remaining ticks */
+    SW_TIMER_MODES mode;
+    bool active;
     SwTimerHandler_t callback;
 } SwTimer_t;
 
 /*Brief: SW Timer initialization
 * [in] - swTimer - pointer to SW timer object
-* [in] - timer - pointer to HW timer object
-* [in] - timeoutMs - timeout in ms
+* [in] - timeoutTicks - timeout in ticks of HW timer
 * [in] - mode - 0 - one shot; 1 - periodic
 * [out] - none
 * */
-void SwTimerInit(SwTimer_t* const swTimer, TimerHandle_t* const timer, uint32_t timeoutMs, TIMER_MODES mode);
+void SwTimerInit(SwTimer_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode);
 
 /*Brief: SW Timer start
 * [in] - swTimer - pointer to SW timer object
@@ -39,6 +46,12 @@ void SwTimerStop(SwTimer_t* const swTimer);
 * [out] - none
 * */
 void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback);
+
+/*Brief: Update active SW Timers
+* [in] - none
+* [out] - none
+* */
+void SwTimerTick(void);
 
 #endif /* SW_TIMER */
 
