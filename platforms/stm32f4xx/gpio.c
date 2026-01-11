@@ -308,8 +308,8 @@ static void GpioOpen(GpioHandle_t* handle,
 
     ASSERT(port != NULL);
 
-    handle->gpio.stm32f411.port = port;
-    handle->gpio.stm32f411.pinIndex = pinIndex;
+    handle->gpio.base = port;
+    handle->gpio.pinIndex = pinIndex;
     handle->irqHandler = NULL;
 
     GpioEnableClocks(port);
@@ -345,13 +345,47 @@ static void GpioClose(GpioHandle_t* const handle)
     ASSERT(handle != NULL);
     ASSERT(handle->ops != NULL);
 
-    handle->initialized = false;
+    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
+    uint8_t pinIndex = handle->gpio.pinIndex;
+    uint32_t mask = (1U << pinIndex);
+    uint8_t extiReg = (pinIndex / 4);
+    uint8_t extiIndex = (pinIndex % 4) * 4;
+    uint8_t extiValue = GpioGetExtiLine(port);
+    IRQn_Type irqNum = GpioGetIrqNumber(pinIndex);
 
-    GpioDisableClocks(handle->gpio.stm32f411.port);
+/*TODO:disable interrupts */
+
+    for (uint8_t i = 0; i < GPIO_IRQ_MAX; i++)
+    {
+        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex)
+        {
+            m_GpioIrq[i]->irqHandler = NULL;
+
+            break;
+        }
+    }
+
+    SYSCFG->EXTICR[extiReg] &= ~(0x0F << extiIndex);
+    SYSCFG->EXTICR[extiReg] &= ~(extiValue << extiIndex);
+
+    /* disable line on IMR */
+    EXTI->IMR &= ~mask;
+
+    /* clear pending on EXTI */
+    if (EXTI->PR & mask)
+    {
+        EXTI->PR = mask;
+    }
+
+    NVIC_ClearPendingIRQ(irqNum);
+
+    NVIC_DisableIRQ(irqNum);
 
     SYS_CLOCK_DISABLE;
 
-/*TODO:disable interrupts */
+    GpioDisableClocks(port);
+
+    handle->initialized = false;
 }
 
 static void GpioWrite(const GpioHandle_t* const handle, PIN_STATES state)
@@ -364,8 +398,8 @@ static void GpioWrite(const GpioHandle_t* const handle, PIN_STATES state)
         return;
     }
 
-    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.stm32f411.port;
-    uint8_t pinIndex = handle->gpio.stm32f411.pinIndex;
+    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
+    uint8_t pinIndex = handle->gpio.pinIndex;
 
     GpioSetState(port, pinIndex, state);
 }
@@ -380,8 +414,8 @@ static uint16_t GpioRead(const GpioHandle_t* const handle)
         return 0xFF;
     }
 
-    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.stm32f411.port;
-    uint8_t pinIndex = handle->gpio.stm32f411.pinIndex;
+    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
+    uint8_t pinIndex = handle->gpio.pinIndex;
 
     uint16_t value = (uint16_t)(port->IDR & (1U << pinIndex));
 
@@ -400,8 +434,8 @@ static void GpioToggle(const GpioHandle_t* const handle)
         return;
     }
 
-    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.stm32f411.port;
-    uint8_t pinIndex = handle->gpio.stm32f411.pinIndex;
+    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
+    uint8_t pinIndex = handle->gpio.pinIndex;
 
     uint32_t odr = port->ODR;
 
@@ -431,13 +465,13 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
         return;
     }
 
-    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.stm32f411.port;
-    uint8_t pinIndex = handle->gpio.stm32f411.pinIndex;
+    GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
+    uint8_t pinIndex = handle->gpio.pinIndex;
     uint32_t mask = (1U << pinIndex);
 
     for (uint8_t i = 0; i < GPIO_IRQ_MAX; i++)
     {
-        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.stm32f411.pinIndex == pinIndex)
+        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex)
         {
             return;
         }
