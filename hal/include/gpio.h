@@ -65,28 +65,11 @@ typedef struct
 
     GpioIrqHandler irqHandler;
 
-    union
+    struct
     {
-        struct
-        {
-            void* port;
-            uint8_t pinIndex;
-        } stm32f411;
-
-        struct
-        {
-            uint32_t base;
-            uint8_t pinMask;
-            uint8_t pinIndex;
-        } cc3220;
-
-        struct
-        {
-            volatile uint8_t* ddr;
-            volatile uint8_t* port;
-            volatile uint8_t* pinReg;
-            uint8_t bit;
-        } atmega328;
+        void* base;
+        uint8_t pinMask;
+        uint8_t pinIndex;
     } gpio;
 
     bool initialized;
