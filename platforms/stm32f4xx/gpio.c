@@ -345,6 +345,11 @@ static void GpioClose(GpioHandle_t* const handle)
     ASSERT(handle != NULL);
     ASSERT(handle->ops != NULL);
 
+    if (!handle->initialized)
+    {
+        return;
+    }
+
     GPIO_TypeDef* port = (GPIO_TypeDef*)handle->gpio.base;
     uint8_t pinIndex = handle->gpio.pinIndex;
     uint32_t mask = (1U << pinIndex);
@@ -352,8 +357,6 @@ static void GpioClose(GpioHandle_t* const handle)
     uint8_t extiIndex = (pinIndex % 4) * 4;
     uint8_t extiValue = GpioGetExtiLine(port);
     IRQn_Type irqNum = GpioGetIrqNumber(pinIndex);
-
-/*TODO:disable interrupts */
 
     for (uint8_t i = 0; i < GPIO_IRQ_MAX; i++)
     {
