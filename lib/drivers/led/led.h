@@ -34,4 +34,6 @@ void LedOff(const Led_t* const led);
 * */
 void LedToggle(const Led_t* const led);
 
+void LedDeinit(const Led_t* const led);
+
 #endif /* LED_H */

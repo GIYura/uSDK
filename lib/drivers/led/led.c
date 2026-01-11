@@ -33,3 +33,10 @@ void LedToggle(const Led_t* const led)
     led->gpio->ops->toggle(led->gpio);
 }
 
+void LedDeinit(const Led_t* const led)
+{
+    ASSERT(led != NULL);
+
+    led->gpio->ops->close(led->gpio);
+}
+
