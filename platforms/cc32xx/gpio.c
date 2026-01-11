@@ -271,8 +271,9 @@ static void GpioOpen(GpioHandle_t* const handle,
 
     const GpioMap_t* map = &m_GPIO_MAP[pin];
 
-    handle->gpio.cc3220.base = map->base;
-    handle->gpio.cc3220.pinMask = map->mask;
+    handle->gpio.base = (uint32_t*)map->base;
+    handle->gpio.pinMask = map->mask;
+    handle->gpio.pinIndex = map->pin;
     handle->irqHandler = NULL;
 
     GpioEnableClocks(map->base);
@@ -320,17 +321,37 @@ static void GpioOpen(GpioHandle_t* const handle,
 
 static void GpioClose(GpioHandle_t* const handle)
 {
-    /*TODO*/
-    if ((handle == NULL) || (handle->ops != NULL))
+    ASSERT(handle != NULL);
+    ASSERT(handle->ops != NULL);
+
+    if (!handle->initialized)
     {
         return;
     }
 
+    uint32_t base = (uint32_t)handle->gpio.base;
+    uint8_t pinMask = handle->gpio.pinMask;
+    uint8_t pinIndex = GpioGetPinIndex(base, pinMask);
+
+    for (uint8_t i = 0; i < PIN_GPIO_MAX; i++)
+    {
+        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex)
+        {
+            m_GpioIrq[i]->irqHandler = NULL;
+
+            break;
+        }
+    }
+
+    PinTypeGPIO(handle->gpio.pinIndex, PIN_STRENGTH_2MA, PIN_TYPE_STD);
+    GPIODirModeSet(base, pinMask, GPIO_DIR_MODE_IN);
+
+    GPIOIntClear(base, pinMask);
+    GPIOIntDisable(base, pinMask);
+
+    /* TODO: close interrupt */
+
     handle->initialized = false;
-
-    GpioDisableClocks(handle->gpio.cc3220.base);
-
-    /*TODO: disable interrupts */
 }
 
 static void GpioWrite(const GpioHandle_t* const handle, PIN_STATES state)
@@ -343,8 +364,8 @@ static void GpioWrite(const GpioHandle_t* const handle, PIN_STATES state)
         return;
     }
 
-    uint32_t base = handle->gpio.cc3220.base;
-    uint8_t pinMask = handle->gpio.cc3220.pinMask;
+    uint32_t base = (uint32_t)handle->gpio.base;
+    uint8_t pinMask = handle->gpio.pinMask;
 
     uint8_t value = (state == PIN_STATE_HIGH) ? pinMask : 0U;
 
@@ -361,8 +382,8 @@ static uint16_t GpioRead(const GpioHandle_t* const handle)
         return 0xFF;
     }
 
-    uint32_t base = handle->gpio.cc3220.base;
-    uint8_t pinMask = handle->gpio.cc3220.pinMask;
+    uint32_t base = (uint32_t)handle->gpio.base;
+    uint8_t pinMask = handle->gpio.pinMask;
 
     return (uint16_t)(GPIOPinRead(base, pinMask) ? 1U : 0U);
 }
@@ -377,8 +398,8 @@ static void GpioToggle(const GpioHandle_t* const handle)
         return;
     }
 
-    uint32_t base = handle->gpio.cc3220.base;
-    uint8_t pinMask = handle->gpio.cc3220.pinMask;
+    uint32_t base = (uint32_t)handle->gpio.base;
+    uint8_t pinMask = handle->gpio.pinMask;
 
     /*TODO: how to make it atomic??? */
 #if 0
@@ -408,8 +429,8 @@ static void GPIO_IRQ_Handler(void)
             continue;
         }
 
-        uint32_t base = handle->gpio.cc3220.base;
-        uint8_t mask = handle->gpio.cc3220.pinMask;
+        uint32_t base = (uint32_t)handle->gpio.base;
+        uint8_t mask = handle->gpio.pinMask;
 
         uint32_t status = GPIOIntStatus(base, true);
 
@@ -441,8 +462,8 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
         return;
     }
 
-    uint32_t base = handle->gpio.cc3220.base;
-    uint8_t pinMask = handle->gpio.cc3220.pinMask;
+    uint32_t base = (uint32_t)handle->gpio.base;
+    uint8_t pinMask = handle->gpio.pinMask;
     uint8_t pinIndex = GpioGetPinIndex(base, pinMask);
     uint8_t intPriority = GpioMapInterruptPriority(priority);
     uint8_t intNum = GpioMapInterrupt(base);
@@ -454,14 +475,14 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
 
     for (uint8_t i = 0; i < PIN_GPIO_MAX; i++)
     {
-        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.cc3220.pinIndex == pinIndex)
+        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex)
         {
             return;
         }
     }
 
     handle->irqHandler = handler;
-    handle->gpio.cc3220.pinIndex = pinIndex;
+    handle->gpio.pinIndex = pinIndex;
     m_GpioIrq[pinIndex] = handle;
 
     GPIOIntDisable(base, pinMask);
