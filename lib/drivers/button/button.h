@@ -18,6 +18,12 @@ typedef struct
 * */
 void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, uint8_t pin);
 
+/*Brief: Button de-initialization
+* [in] - button - pointer to button object
+* [out] - none
+* */
+void ButtonDeinit(Button_t* const button);
+
 /*Brief: Register button press handler
  * [in] - button - pointer to button object
  * [in] - callback - callback function
