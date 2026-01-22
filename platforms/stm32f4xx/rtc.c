@@ -92,6 +92,10 @@ static void RtcDisable(void)
     RCC->BDCR &= ~(RCC_BDCR_RTCEN);
 }
 
+#if 0
+/*
+ * NOTE: not used
+ * */
 static void LSI_Enable(void)
 {
     RCC->CSR |= RCC_CSR_LSION;
@@ -103,6 +107,7 @@ static void LSI_Disable(void)
 {
     RCC->CSR &= ~RCC_CSR_LSION;
 }
+#endif
 
 static void LSE_Enable(void)
 {
