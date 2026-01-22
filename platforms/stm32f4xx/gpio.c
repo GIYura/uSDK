@@ -83,6 +83,10 @@ static uint32_t GpioGetExtiLine(const GPIO_TypeDef* const port)
     return 0xFF;
 }
 
+#if 0
+/*
+ * NOTE: not used
+ * */
 static void GpioDisableClocks(const GPIO_TypeDef* const port)
 {
     ASSERT(port != NULL);
@@ -123,6 +127,7 @@ static void GpioDisableClocks(const GPIO_TypeDef* const port)
         return;
     }
 }
+#endif
 
 static void GpioEnableClocks(const GPIO_TypeDef* const port)
 {
@@ -355,12 +360,12 @@ static void GpioClose(GpioHandle_t* const handle)
     uint32_t mask = (1U << pinIndex);
     uint8_t extiReg = (pinIndex / 4);
     uint8_t extiIndex = (pinIndex % 4) * 4;
-    uint8_t extiValue = GpioGetExtiLine(port);
+
     IRQn_Type irqNum = GpioGetIrqNumber(pinIndex);
 
     for (uint8_t i = 0; i < GPIO_IRQ_MAX; i++)
     {
-        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex)
+        if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex && m_GpioIrq[i]->gpio.base == port)
         {
             m_GpioIrq[i]->irqHandler = NULL;
 
@@ -368,11 +373,17 @@ static void GpioClose(GpioHandle_t* const handle)
         }
     }
 
+    /* external interrupt configuration */
     SYSCFG->EXTICR[extiReg] &= ~(0x0F << extiIndex);
-    SYSCFG->EXTICR[extiReg] &= ~(extiValue << extiIndex);
 
-    /* disable line on IMR */
+    /* disable line on Interrupt mask register */
     EXTI->IMR &= ~mask;
+
+    /* rising trigger disabled */
+    EXTI->RTSR &= ~mask;
+
+    /* Falling trigger disabled */
+    EXTI->FTSR &= ~mask;
 
     /* clear pending on EXTI */
     if (EXTI->PR & mask)
@@ -380,13 +391,25 @@ static void GpioClose(GpioHandle_t* const handle)
         EXTI->PR = mask;
     }
 
-    NVIC_ClearPendingIRQ(irqNum);
+/*
+ * NOTE:
+ * NVIC IRQ is disabled only if no other EXTI lines in the same group are active.
+ */
+    if (pinIndex <= 4)
+    {
+        NVIC_ClearPendingIRQ(irqNum);
+        NVIC_DisableIRQ(irqNum);
+    }
+    else
+    {
+        uint32_t groupMask = (pinIndex <= 9) ? 0x3E0U : 0xFC00U;
 
-    NVIC_DisableIRQ(irqNum);
-
-    SYS_CLOCK_DISABLE;
-
-    GpioDisableClocks(port);
+        if ((EXTI->IMR & groupMask) == 0)
+        {
+            NVIC_ClearPendingIRQ(irqNum);
+            NVIC_DisableIRQ(irqNum);
+        }
+    }
 
     handle->initialized = false;
 }
