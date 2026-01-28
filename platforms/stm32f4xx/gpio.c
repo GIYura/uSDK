@@ -368,7 +368,7 @@ static void GpioClose(GpioHandle_t* const handle)
         if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->gpio.pinIndex == pinIndex && m_GpioIrq[i]->gpio.base == port)
         {
             m_GpioIrq[i]->irqHandler = NULL;
-
+            m_GpioIrq[i] = NULL;
             break;
         }
     }
