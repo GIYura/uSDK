@@ -273,7 +273,7 @@ static void GpioOpen(GpioHandle_t* const handle,
 
     handle->gpio.base = (uint32_t*)map->base;
     handle->gpio.pinMask = map->mask;
-    handle->gpio.pinIndex = map->pin;
+    handle->gpio.pinIndex = GpioGetPinIndex(map->base, map->mask);
     handle->irqHandler = NULL;
 
     GpioEnableClocks(map->base);
