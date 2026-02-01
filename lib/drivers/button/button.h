@@ -2,12 +2,17 @@
 #define BUTTON_H
 
 #include "gpio.h"
+#include "sw-timer.h"
 
 typedef void (*ButtonEventHandler)(void);
 
 typedef struct
 {
     GpioHandle_t* gpio;
+    SwTimer_t* debounceTimer;
+    uint32_t debounceTicks;
+    ButtonEventHandler handler;
+    volatile bool debouncing;
 } Button_t;
 
 /*Brief: Button initialization
@@ -16,7 +21,7 @@ typedef struct
 * [in] - pin - GPIO pin
 * [out] - none
 * */
-void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, uint8_t pin);
+void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, SwTimer_t* const swTimer, uint32_t debounceTicks);
 
 /*Brief: Button de-initialization
 * [in] - button - pointer to button object
@@ -29,6 +34,6 @@ void ButtonDeinit(Button_t* const button);
  * [in] - callback - callback function
  * [out] - none
  * */
-void ButtonRegisterHandler(const Button_t* const button, ButtonEventHandler callback);
+void ButtonRegisterHandler(Button_t* const button, ButtonEventHandler callback);
 
 #endif /* BUTTON_H */
