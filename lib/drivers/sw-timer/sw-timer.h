@@ -9,7 +9,7 @@ typedef enum
     SW_TIMER_PERIODIC,
 } SW_TIMER_MODES;
 
-typedef void (*SwTimerHandler_t)(void);
+typedef void (*SwTimerHandler_t)(void* context);
 
 typedef struct
 {
@@ -18,6 +18,7 @@ typedef struct
     SW_TIMER_MODES mode;
     bool active;
     SwTimerHandler_t callback;
+    void* context;
 } SwTimer_t;
 
 /*Brief: SW Timer initialization
@@ -45,7 +46,7 @@ void SwTimerStop(SwTimer_t* const swTimer);
 * [in] - callback - SW timer callback
 * [out] - none
 * */
-void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback);
+void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback, void* context);
 
 /*Brief: Update active SW Timers
 * [in] - none

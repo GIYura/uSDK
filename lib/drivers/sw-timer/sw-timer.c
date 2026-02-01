@@ -46,38 +46,39 @@ void SwTimerStop(SwTimer_t* const swTimer)
     swTimer->active = false;
 }
 
-void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback)
+void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback, void* context)
 {
     ASSERT(swTimer != NULL);
 
     swTimer->callback = callback;
+    swTimer->context = context;
 }
 
 void SwTimerTick(void)
 {
     for (uint8_t i = 0; i < SW_TIMER_MAX; i++)
     {
-        SwTimer_t* t = m_swTimers[i];
+        SwTimer_t* timer = m_swTimers[i];
 
-        if (!t || !t->active)
+        if (!timer || !timer->active)
         {
             continue;
         }
 
-        if (--t->remaining == 0)
+        if (--timer->remaining == 0)
         {
-            if (t->callback)
+            if (timer->callback)
             {
-                t->callback();
+                timer->callback(timer->context);
             }
 
-            if (t->mode == SW_TIMER_PERIODIC)
+            if (timer->mode == SW_TIMER_PERIODIC)
             {
-                t->remaining = t->period;
+                timer->remaining = timer->period;
             }
             else
             {
-                t->active = false;
+                timer->active = false;
             }
         }
     }
