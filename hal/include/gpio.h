@@ -55,15 +55,15 @@ typedef enum
     PIN_IRQ_BOTH
 } PIN_IRQ_MODES;
 
-typedef void (*GpioIrqHandler)(void);
+typedef void (*GpioIrqHandler)(void* context);
 
 typedef struct GpioOps GpioOps_t;
 
 typedef struct
 {
     const GpioOps_t* ops;
-
     GpioIrqHandler irqHandler;
+    void* context;
 
     struct
     {
@@ -123,7 +123,7 @@ struct GpioOps
 * [in] - handler - callback function pointer
 * [out] - none
 * */
-    void (*interrupt)(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler);
+    void (*interrupt)(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler, void* context);
 };
 
 /*Brief:

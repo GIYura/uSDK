@@ -286,7 +286,7 @@ static void GpioExtiHandler(uint8_t first, uint8_t last)
 
             if (m_GpioIrq[i] != NULL && m_GpioIrq[i]->irqHandler != NULL)
             {
-                (*m_GpioIrq[i]->irqHandler)();
+                (*m_GpioIrq[i]->irqHandler)(m_GpioIrq[i]->context);
             }
         }
     }
@@ -475,7 +475,7 @@ static void GpioToggle(const GpioHandle_t* const handle)
     }
 }
 
-static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler)
+static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uint8_t priority, GpioIrqHandler handler, void* context)
 {
     ASSERT(handle != NULL);
     ASSERT(handler != NULL);
@@ -503,6 +503,7 @@ static void GpioSetInterrupt(GpioHandle_t* const handle, PIN_IRQ_MODES mode, uin
         }
     }
 
+    handle->context = context;
     handle->irqHandler = handler;
 
     SYS_CLOCK_ENABLE;
