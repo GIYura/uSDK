@@ -10,7 +10,7 @@
 #define RTC_WRITE_PROTECTION_KEY_2  ((uint8_t)0x53U)
 #define RTC_WUT_MAX                 (0xFFFFU)
 
-#if 1
+#if 0
 /*
  * NOTE: for test only
  * */
@@ -239,7 +239,7 @@ static void RtcOpen(TimerHandle_t* const handle, uint32_t timeout)
 
     handle->initialized = true;
 
-#if 1
+#if 0
     const GpioOps_t* gpioOps = GpioGetOps();
     m_gpio2.ops = gpioOps;
     m_gpio2.ops->open(&m_gpio2, PC_3, PIN_MODE_OUTPUT, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_STATE_LOW);
@@ -332,7 +332,7 @@ static void RtcStop(const TimerHandle_t* const handle)
 
 void RTC_WKUP_IRQHandler(void)
 {
-#if 1
+#if 0
     m_gpio2.ops->toggle(&m_gpio2);
 #endif
 
