@@ -907,9 +907,3 @@ static void vPortEnableVFP( void )
     }
 
 #endif /* configASSERT_DEFINED */
-
-#if 1
-void SVC_Handler(void)    __attribute__((alias("vPortSVCHandler")));
-void PendSV_Handler(void) __attribute__((alias("xPortPendSVHandler")));
-void SysTick_Handler(void)__attribute__((alias("xPortSysTickHandler")));
-#endif
