@@ -440,7 +440,7 @@ static void GPIO_IRQ_Handler(void)
 
             if (handle->irqHandler != NULL)
             {
-                (*handle->irqHandler)();
+                (*handle->irqHandler)(m_GpioIrq[i]->context);
             }
         }
     }
