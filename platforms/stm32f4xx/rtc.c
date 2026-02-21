@@ -348,7 +348,7 @@ void RTC_WKUP_IRQHandler(void)
     }
 }
 
-static void RtcSetInterrupt(TimerHandle_t* const handle, TimerIrqHandler handler)
+static void RtcSetInterrupt(TimerHandle_t* const handle, TimerIrqHandler handler, uint8_t priority)
 {
     ASSERT(handle != NULL);
     ASSERT(handler != NULL);
@@ -381,7 +381,7 @@ static void RtcSetInterrupt(TimerHandle_t* const handle, TimerIrqHandler handler
     RtcWriteProtectionEnable(rtc);
 
     NVIC_ClearPendingIRQ(irqNum);
-    NVIC_SetPriority(irqNum, 0);
+    NVIC_SetPriority(irqNum, priority);
     NVIC_EnableIRQ(irqNum);
 }
 

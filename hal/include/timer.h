@@ -56,7 +56,27 @@ struct TimerOps
 * [in] - handler - callback function pointer
 * [out] - none
 * */
-    void (*interrupt)(TimerHandle_t* const handle, TimerIrqHandler handler);
+#if 0
+/*
+ * uSDK Timer Interrupt Context Contract
+ *
+ * - Timer callbacks are executed in ISR (interrupt) context.
+ * - The callback runs inside the hardware timer IRQ handler.
+ *
+ * - If a callback calls an RTOS "...FromISR()" API (e.g. FreeRTOS),
+ *   the corresponding hardware interrupt priority must be
+ *   numerically >= the RTOS system call interrupt priority threshold
+ *   (e.g. configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY).
+ *
+ * - Using too high an interrupt priority (e.g. 0) while calling
+ *   RTOS API from the callback will lead to configASSERT failure
+ *   or undefined behavior.
+ *
+ *   Refer for details:
+ *   https://www.freertos.org/Documentation/02-Kernel/03-Supported-devices/04-Demos/ARM-Cortex/RTOS-Cortex-M3-M4#cortex-m-hardware-details
+ */
+#endif
+    void (*interrupt)(TimerHandle_t* const handle, TimerIrqHandler handler, uint8_t priority);
 };
 
 /*Brief:
