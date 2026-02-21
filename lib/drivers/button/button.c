@@ -3,7 +3,7 @@
 #include "custom-assert.h"
 #include "button.h"
 
-#if 1
+#if 0
 /*
  * NOTE: for test only
  * */
@@ -13,7 +13,7 @@ static GpioHandle_t m_gpio1;
 
 static void Button_OnGpioIrq(void* context)
 {
-#if 1
+#if 0
     m_gpio1.ops->toggle(&m_gpio1);
 #endif
 
@@ -32,7 +32,7 @@ static void Button_OnGpioIrq(void* context)
 
 static void Button_OnDebounce(void* context)
 {
-#if 1
+#if 0
     m_gpio1.ops->toggle(&m_gpio1);
 #endif
 
@@ -68,7 +68,7 @@ void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, SwTimer_t* con
     SwTimerInit(swTimer, debounceTicks, SW_TIMER_ONE_SHOT);
     SwTimerRegisterCallback(swTimer, &Button_OnDebounce, button);
 
-#if 1
+#if 0
     const GpioOps_t* gpioOps = GpioGetOps();
     m_gpio1.ops = gpioOps;
     m_gpio1.ops->open(&m_gpio1, PC_4, PIN_MODE_OUTPUT, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_STATE_LOW);
