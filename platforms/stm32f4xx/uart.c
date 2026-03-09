@@ -9,16 +9,21 @@
 
 #define UART_PORT_MAX           (3)
 
-#define UART_1_CLOCK_ENABLE (RCC->APB2ENR |= (RCC_APB2ENR_USART1EN))
-#define UART_2_CLOCK_ENABLE (RCC->APB1ENR |= (RCC_APB1ENR_USART2EN))
-#define UART_6_CLOCK_ENABLE (RCC->APB2ENR |= (RCC_APB2ENR_USART6EN))
+#define UART_1_CLOCK_ENABLE     (RCC->APB2ENR |= (RCC_APB2ENR_USART1EN))
+#define UART_2_CLOCK_ENABLE     (RCC->APB1ENR |= (RCC_APB1ENR_USART2EN))
+#define UART_6_CLOCK_ENABLE     (RCC->APB2ENR |= (RCC_APB2ENR_USART6EN))
 
-#define DMA_1_CLOCK_ENABLE (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA1EN))
-#define DMA_2_CLOCK_ENABLE (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA2EN))
+#if 0
+/*
+ * NOTE: not used so far
+ * */
+#define DMA_1_CLOCK_ENABLE      (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA1EN))
+#define DMA_2_CLOCK_ENABLE      (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA2EN))
+#endif
 
-#define TIM_2_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM2EN))
-#define TIM_3_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM3EN))
-#define TIM_4_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM4EN))
+#define TIM_2_CLOCK_ENABLE      (RCC->APB1ENR |= (RCC_APB1ENR_TIM2EN))
+#define TIM_3_CLOCK_ENABLE      (RCC->APB1ENR |= (RCC_APB1ENR_TIM3EN))
+#define TIM_4_CLOCK_ENABLE      (RCC->APB1ENR |= (RCC_APB1ENR_TIM4EN))
 
 static UART_Handle_t* m_UartIrq[UART_PORT_MAX] = { NULL };
 
@@ -146,6 +151,7 @@ static void UartInit(UART_Handle_t* const handle, uint8_t uartNum, BAUD_RATE bau
     ASSERT(baud < BAUD_COUNT);
 
     USART_TypeDef* uart = UartGeBaseAddress(uartNum);
+
     handle->base = uart;
     handle->timer = swTimer;
 
@@ -206,7 +212,7 @@ static void UartInit(UART_Handle_t* const handle, uint8_t uartNum, BAUD_RATE bau
     NVIC_EnableIRQ(UartGetIrqType(uartNum));
     NVIC_SetPriority(UartGetIrqType(uartNum), 6);
 
-    m_UartIrq[handle->uartNum] = handle;
+    //m_UartIrq[handle->uartNum] = handle;
 
     SwTimerInit(swTimer, rxTimeoutMs, SW_TIMER_ONE_SHOT);
     SwTimerRegisterCallback(swTimer, &OnRxTimeout, handle);
@@ -243,6 +249,8 @@ static void UartWriteNoneBlocking(UART_Handle_t* const handle, const uint8_t* co
 static void UartSetIntrerrupt(UART_Handle_t* const handle, UART_EventHandler_t callback, void* context)
 {
     ASSERT(handle != NULL);
+
+    m_UartIrq[handle->uartNum] = handle;
 
     handle->onRxDone = callback;
     handle->context = context;
@@ -392,14 +400,14 @@ static void TransmitterEnable(USART_TypeDef* const uart)
 {
     ASSERT(uart != NULL);
 
-    uart->CR1 |= USART_CR1_TE;
+    uart->CR1 |= (USART_CR1_TE);
 }
 
 static void ReceiverEnable(USART_TypeDef* const uart)
 {
     ASSERT(uart != NULL);
 
-    uart->CR1 |= USART_CR1_RE;
+    uart->CR1 |= (USART_CR1_RE);
 }
 
 static void SetFormat(USART_TypeDef* const uart)
@@ -423,10 +431,10 @@ static void UartEnable(USART_TypeDef* const uart)
 {
     ASSERT(uart != NULL);
 
-    uart->CR1 |= USART_CR1_UE;
+    uart->CR1 |= (USART_CR1_UE);
 }
 
-/* Gpio operations */
+/* UART operations */
 static const UartOps_t m_UartOps = {
     .open = &UartInit,
     .write = &UartWriteNoneBlocking,

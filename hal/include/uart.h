@@ -53,7 +53,7 @@ struct UartOps
 {
 /*Brief: UART open
  * [in] - handle - pointer to UART handle
- * [in] - uartNum - uart name defined in bsp/<platform>/gpio-name.h
+ * [in] - uartNum - uart name defined in bsp/<platform>/uart-name.h
  * [in] - baud - baud rate
  * [in] - swTimer - pointer to software timer
  * [in] - rxTimeoutMs - receive timeout in ms

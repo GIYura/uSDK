@@ -4,7 +4,7 @@
 #include "buffer.h"
 #include "esp8266.h"
 
-#define ESP_RESPONSE_MAX    128
+#define ESP_RESPONSE_MAX    128 /* bytes */
 
 static ESP_RESPONSE EspParseResponse(const char* resp);
 
@@ -66,6 +66,7 @@ static ESP_RESPONSE EspParseResponse(const char* resp)
 void EspInit(EspHandle_t* const handle, UART_Handle_t* uart)
 {
     ASSERT(handle);
+    ASSERT(uart);
 
     handle->state = ESP_STATE_IDLE;
     handle->handler = NULL;
