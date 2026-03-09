@@ -1,8 +1,13 @@
 #include <stdbool.h>
 #include <stddef.h>
-#if 0
+
+#include "stm32f411xe.h"
+
 #include "custom-assert.h"
 #include "uart.h"
+#include "gpio-name.h"
+
+#define UART_PORT_MAX           (3)
 
 #define UART_1_CLOCK_ENABLE (RCC->APB2ENR |= (RCC_APB2ENR_USART1EN))
 #define UART_2_CLOCK_ENABLE (RCC->APB1ENR |= (RCC_APB1ENR_USART2EN))
@@ -11,40 +16,44 @@
 #define DMA_1_CLOCK_ENABLE (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA1EN))
 #define DMA_2_CLOCK_ENABLE (RCC->AHB1ENR |= (RCC_AHB1ENR_DMA2EN))
 
-#define UART_RX_TIMEOUT     50     /* ms */
-
 #define TIM_2_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM2EN))
 #define TIM_3_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM3EN))
 #define TIM_4_CLOCK_ENABLE  (RCC->APB1ENR |= (RCC_APB1ENR_TIM4EN))
 
-static UART_Handle_t* m_UartIrq[UART_COUNT];
+static UART_Handle_t* m_UartIrq[UART_PORT_MAX] = { NULL };
 
-static void TxInterruptEnable(UART_Handle_t* const obj);
-static void TxInterruptDisable(UART_Handle_t* const obj);
+static void TxInterruptEnable(USART_TypeDef* const uart);
+static void TxInterruptDisable(USART_TypeDef* const uart);
 
-static void RxInterruptEnable(UART_Handle_t* const obj);
-static void RxInterruptDisable(UART_Handle_t* const obj);
+static void RxInterruptEnable(USART_TypeDef* const uart);
+static void RxInterruptDisable(USART_TypeDef* const uart);
 
-static void TcInterruptEnable(UART_Handle_t* const obj);
-static void TcInterruptDisable(UART_Handle_t* const obj);
+static void TcInterruptEnable(USART_TypeDef* const uart);
+static void TcInterruptDisable(USART_TypeDef* const uart);
 
-static IRQn_Type UartGetIrqType(const UART_Handle_t* const obj);
-static IRQn_Type TimerGetIrqType(const UART_Handle_t* const obj);
+static IRQn_Type UartGetIrqType(uint8_t uart);
 
-static void UartOnInterrupt(UART_Handle_t* const obj);
-static void UartRxTimeout(UART_Handle_t* const obj);
+static void UartOnInterrupt(UART_Handle_t* const handle);
 
-static void TransmitterEnable(UART_Handle_t* const obj);
-static void ReceiverEnable(UART_Handle_t* const obj);
+static void TransmitterEnable(USART_TypeDef* const uart);
+static void ReceiverEnable(USART_TypeDef* const uart);
 
-static void SetFormat(UART_Handle_t* const obj);
+static void SetFormat(USART_TypeDef* const uart);
 
-static void UartEnable(UART_Handle_t* const obj);
+static void UartEnable(USART_TypeDef* const uart);
 
+#if 0
+/*
+ * NOTE: for test only
+ * */
+#include "gpio.h"
+#include "gpio-name.h"
+static GpioHandle_t m_gpio2;
+#endif
+
+#if 0
 static void DMA_Config(UART_Handle_t* const obj, UART_NAMES uartName);
-
-static void TimerInit(UART_Handle_t* const obj, UART_NAMES uartName, uint32_t timeoutMs);
-static void TimerStart(UART_Handle_t* const obj);
+#endif
 
 /*Brief: Converts baud rate in to register value */
 static uint16_t ComputeBaudRate(uint32_t pclk, BAUD_RATE baud)
@@ -107,58 +116,71 @@ static uint16_t ComputeBaudRate(uint32_t pclk, BAUD_RATE baud)
     return (mantissa << 4) | (fraction & 0x0F);
 }
 
-void UartInit(UART_Handle_t* const obj, UART_NAMES uartName, BAUD_RATE baud)
+static USART_TypeDef* UartGeBaseAddress(uint8_t uartNum)
 {
-    ASSERT(obj != NULL);
-    ASSERT(uartName < UART_COUNT);
+    ASSERT(uartNum < UART_PORT_MAX);
+
+    if (uartNum == 0) return USART1;
+    if (uartNum == 1) return USART2;
+    if (uartNum == 2) return USART6;
+
+    /* should never reach here */
+    return NULL;
+}
+
+static void OnRxTimeout(void* context)
+{
+    UART_Handle_t* handle = (UART_Handle_t*)context;
+
+    if (handle != NULL && handle->onRxDone != NULL)
+    {
+        (*handle->onRxDone)(handle->context);
+    }
+}
+
+static void UartInit(UART_Handle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs)
+{
+    ASSERT(handle != NULL);
+    ASSERT(swTimer != NULL);
+    ASSERT(uartNum < UART_PORT_MAX);
     ASSERT(baud < BAUD_COUNT);
 
-    obj->isTransmitting = false;
-    obj->uartName = uartName;
-    obj->isTransmitCompeted = true;
-    obj->initialized = false;
+    USART_TypeDef* uart = UartGeBaseAddress(uartNum);
+    handle->base = uart;
+    handle->timer = swTimer;
 
-    switch (uartName)
+    const GpioOps_t* ops = GpioGetOps();
+    handle->txGpio.ops = ops;
+    handle->rxGpio.ops = ops;
+
+    handle->isTransmitting = false;
+    handle->uartNum = uartNum;
+    handle->isTransmitCompeted = true;
+    handle->initialized = false;
+
+    switch (uartNum)
     {
-        case UART_1:
-            GpioInit(&obj->gpio.tx, PA_9, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
-            GpioInit(&obj->gpio.rx, PA_10, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
+        case 0:
+            handle->txGpio.ops->open(&handle->txGpio, PA_9, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
+            handle->rxGpio.ops->open(&handle->rxGpio, PA_10, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
 
             UART_1_CLOCK_ENABLE;
 
-            obj->instance = USART1;
-
-            obj->instance->BRR = ComputeBaudRate(SystemCoreClock, baud);
-
-            obj->timer = TIM2;
-
             break;
 
-        case UART_2:
-            GpioInit(&obj->gpio.tx, PD_5, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
-            GpioInit(&obj->gpio.rx, PD_6, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
+        case 1:
+            handle->txGpio.ops->open(&handle->txGpio, PD_5, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
+            handle->rxGpio.ops->open(&handle->rxGpio, PD_6, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
 
             UART_2_CLOCK_ENABLE;
 
-            obj->instance = USART2;
-
-            obj->instance->BRR = ComputeBaudRate(SystemCoreClock, baud);
-
-            obj->timer = TIM3;
-
             break;
 
-        case UART_6:
-            GpioInit(&obj->gpio.tx, PA_11, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_8);
-            GpioInit(&obj->gpio.rx, PA_12, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, PIN_AF_8);
+        case 2:
+            handle->txGpio.ops->open(&handle->txGpio, PA_11, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
+            handle->rxGpio.ops->open(&handle->rxGpio, PA_12, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_7);
 
             UART_6_CLOCK_ENABLE;
-
-            obj->instance = USART6;
-
-            obj->instance->BRR = ComputeBaudRate(SystemCoreClock, baud);
-
-            obj->timer = TIM4;
 
             break;
 
@@ -167,134 +189,139 @@ void UartInit(UART_Handle_t* const obj, UART_NAMES uartName, BAUD_RATE baud)
             break;
     }
 
-    TransmitterEnable(obj);
+    uart->BRR = ComputeBaudRate(SystemCoreClock, baud);
 
-    ReceiverEnable(obj);
-    RxInterruptEnable(obj);
+    TransmitterEnable(uart);
 
-    SetFormat(obj);
+    ReceiverEnable(uart);
+    RxInterruptEnable(uart);
 
-    UartEnable(obj);
+    SetFormat(uart);
 
-    BufferCreate(&obj->txBuffer, &obj->txData, sizeof(obj->txData), sizeof(uint8_t), true);
-    BufferCreate(&obj->rxBuffer, &obj->rxData, sizeof(obj->rxData), sizeof(uint8_t), true);
+    UartEnable(uart);
 
-    NVIC_EnableIRQ(UartGetIrqType(obj));
-    NVIC_SetPriority(UartGetIrqType(obj), 1);
+    BufferCreate(&handle->txBuffer, &handle->txData, sizeof(handle->txData), sizeof(uint8_t), false);
+    BufferCreate(&handle->rxBuffer, &handle->rxData, sizeof(handle->rxData), sizeof(uint8_t), false);
 
-    m_UartIrq[obj->uartName] = obj;
+    NVIC_EnableIRQ(UartGetIrqType(uartNum));
+    NVIC_SetPriority(UartGetIrqType(uartNum), 6);
 
-    TimerInit(obj, uartName, UART_RX_TIMEOUT);
+    m_UartIrq[handle->uartNum] = handle;
 
-    obj->initialized = true;
+    SwTimerInit(swTimer, rxTimeoutMs, SW_TIMER_ONE_SHOT);
+    SwTimerRegisterCallback(swTimer, &OnRxTimeout, handle);
+
+    handle->initialized = true;
+
+#if 0
+    const GpioOps_t* gpioOps = GpioGetOps();
+    m_gpio2.ops = gpioOps;
+    m_gpio2.ops->open(&m_gpio2, PC_3, PIN_MODE_OUTPUT, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_STATE_LOW);
+
+    m_gpio2.ops->write(&m_gpio2, 0);
+#endif
 }
 
-void UartWrite_IT(UART_Handle_t* const obj, const uint8_t* const buffer, uint8_t size)
+static void UartWriteNoneBlocking(UART_Handle_t* const handle, const uint8_t* const buffer, uint8_t size)
 {
-    ASSERT(obj != NULL);
+    ASSERT(handle != NULL);
 
     for (uint8_t i = 0; i < size; i++)
     {
-        BufferPut(&obj->txBuffer, &buffer[i], sizeof(uint8_t));
+        BufferPut(&handle->txBuffer, &buffer[i], sizeof(uint8_t));
     }
 
-    if (!obj->isTransmitting)
+    if (!handle->isTransmitting)
     {
-        obj->isTransmitting = true;
-        obj->isTransmitCompeted = false;
+        handle->isTransmitting = true;
+        handle->isTransmitCompeted = false;
 
-        TxInterruptEnable(obj);
+        TxInterruptEnable(handle->base);
     }
 }
 
-void UartRegisterReceiveHandler(UART_Handle_t* const obj, UART_EventHandler_t callback)
+static void UartSetIntrerrupt(UART_Handle_t* const handle, UART_EventHandler_t callback, void* context)
 {
-    ASSERT(obj != NULL);
+    ASSERT(handle != NULL);
 
-    obj->onRxDone = callback;
-}
-
-bool UartIdle(UART_Handle_t* const obj)
-{
-    ASSERT(obj != NULL);
-
-    return obj->isTransmitCompeted;
+    handle->onRxDone = callback;
+    handle->context = context;
 }
 
 void USART1_IRQHandler(void)
 {
-    UartOnInterrupt(m_UartIrq[UART_1]);
+    UartOnInterrupt(m_UartIrq[0]);
 }
 
 void USART2_IRQHandler(void)
 {
-    UartOnInterrupt(m_UartIrq[UART_2]);
+    UartOnInterrupt(m_UartIrq[1]);
 }
 
 void USART6_IRQHandler(void)
 {
-    UartOnInterrupt(m_UartIrq[UART_6]);
+    UartOnInterrupt(m_UartIrq[2]);
 }
 
-static void TxInterruptEnable(UART_Handle_t* const obj)
+static void TxInterruptEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 |= (USART_CR1_TXEIE);
+    uart->CR1 |= (USART_CR1_TXEIE);
 }
 
-static void TxInterruptDisable(UART_Handle_t* const obj)
+static void TxInterruptDisable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 &= ~(USART_CR1_TXEIE);
+    uart->CR1 &= ~(USART_CR1_TXEIE);
 }
 
-static void RxInterruptEnable(UART_Handle_t* const obj)
+static void RxInterruptEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 |= (USART_CR1_RXNEIE);
+    uart->CR1 |= (USART_CR1_RXNEIE);
 }
 
-static void RxInterruptDisable(UART_Handle_t* const obj)
+static void RxInterruptDisable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 &= ~(USART_CR1_RXNEIE);
+    uart->CR1 &= ~(USART_CR1_RXNEIE);
 }
 
-static void TcInterruptEnable(UART_Handle_t* const obj)
+static void TcInterruptEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 |= (USART_CR1_TCIE);
+    uart->CR1 |= (USART_CR1_TCIE);
 }
 
-static void TcInterruptDisable(UART_Handle_t* const obj)
+static void TcInterruptDisable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 &= ~(USART_CR1_TCIE);
+    uart->CR1 &= ~(USART_CR1_TCIE);
 }
 
-static IRQn_Type UartGetIrqType(const UART_Handle_t* const obj)
+static IRQn_Type UartGetIrqType(uint8_t uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart < UART_PORT_MAX);
 
     IRQn_Type result;
 
-    switch (obj->uartName)
+    switch (uart)
     {
-        case UART_1:
+        case 0:
             result = USART1_IRQn;
             break;
 
-        case UART_2:
+        case 1:
             result = USART2_IRQn;
             break;
 
-        case UART_6:
+        case 2:
             result = USART6_IRQn;
             break;
 
@@ -306,202 +333,109 @@ static IRQn_Type UartGetIrqType(const UART_Handle_t* const obj)
     return result;
 }
 
-static IRQn_Type TimerGetIrqType(const UART_Handle_t* const obj)
+static void UartOnInterrupt(UART_Handle_t* const handle)
 {
-    ASSERT(obj != NULL);
+    ASSERT(handle != NULL);
 
-    IRQn_Type result;
+    USART_TypeDef* uart = (USART_TypeDef*)handle->base;
 
-    switch (obj->uartName)
-    {
-        case UART_1:
-            result = TIM2_IRQn;
-            break;
-
-        case UART_2:
-            result = TIM3_IRQn;
-            break;
-
-        case UART_6:
-            result = TIM4_IRQn;
-            break;
-
-        default:
-            ASSERT(false);
-            break;
-    }
-
-    return result;
-}
-
-static void UartOnInterrupt(UART_Handle_t* const obj)
-{
     uint8_t item = 0;
 
     /* TX handle */
-    if ((obj->instance->SR & (USART_SR_TXE)) && (obj->instance->CR1 & (USART_CR1_TXEIE)))
+    if ((uart->SR & (USART_SR_TXE)) && (uart->CR1 & (USART_CR1_TXEIE)))
     {
-        if (BufferGet(&obj->txBuffer, &item, sizeof(item)))
+        if (BufferGet(&handle->txBuffer, &item, sizeof(item)))
         {
-            obj->instance->DR = item;
+            uart->DR = item;
         }
         else
         {
-            TxInterruptDisable(obj);
-            TcInterruptEnable(obj);
+            TxInterruptDisable(uart);
+            TcInterruptEnable(uart);
         }
     }
     /* RX handle */
-    if ((obj->instance->SR & (USART_SR_RXNE)) && (obj->instance->CR1 & (USART_CR1_RXNEIE)))
+    if ((uart->SR & (USART_SR_RXNE)) && (uart->CR1 & (USART_CR1_RXNEIE)))
     {
-        item = obj->instance->DR;
+        item = uart->DR;
 
-        if (BufferPut(&obj->rxBuffer, &item, sizeof(item)))
+        if (BufferPut(&handle->rxBuffer, &item, sizeof(item)))
         {
-            TimerStart(obj);
+            SwTimerStart(handle->timer);
+
+#if 0
+            if (BufferCount(&handle->rxBuffer) >= 10)
+            {
+                m_gpio2.ops->write(&m_gpio2, 1);
+            }
+#endif
         }
         else
         {
-            RxInterruptDisable(obj);
+            RxInterruptDisable(uart);
         }
     }
 
     /* TX complete handle */
-    if ((obj->instance->SR & (USART_SR_TC)) && (obj->instance->CR1 & (USART_CR1_TCIE)))
+    if ((uart->SR & (USART_SR_TC)) && (uart->CR1 & (USART_CR1_TCIE)))
     {
-        obj->instance->SR &= ~(USART_SR_TC);
+        uart->SR &= ~(USART_SR_TC);
 
-        TcInterruptDisable(obj);
+        TcInterruptDisable(uart);
 
-        obj->isTransmitting = false;
-        obj->isTransmitCompeted = true;
+        handle->isTransmitting = false;
+        handle->isTransmitCompeted = true;
     }
 }
 
-static void UartRxTimeout(UART_Handle_t* const obj)
+static void TransmitterEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    /* Update interrupt pending */
-    if (obj->timer->SR & TIM_SR_UIF)
-    {
-        /* read-clear-write-0 */
-        obj->timer->SR &= ~TIM_SR_UIF;
-
-        if (obj->onRxDone != NULL)
-        {
-            (*obj->onRxDone)(obj);
-        }
-    }
+    uart->CR1 |= USART_CR1_TE;
 }
 
-static void TransmitterEnable(UART_Handle_t* const obj)
+static void ReceiverEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 |= USART_CR1_TE;
+    uart->CR1 |= USART_CR1_RE;
 }
 
-static void ReceiverEnable(UART_Handle_t* const obj)
+static void SetFormat(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
-
-    obj->instance->CR1 |= USART_CR1_RE;
-}
-
-static void SetFormat(UART_Handle_t* const obj)
-{
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
     /* format: 1 Start bit, 8 Data bits, n Stop bit */
-    obj->instance->CR1 &= ~(USART_CR1_M);
+    uart->CR1 &= ~(USART_CR1_M);
 
     /* Parity control disabled */
-    obj->instance->CR1 &= ~(USART_CR1_PCE);
+    uart->CR1 &= ~(USART_CR1_PCE);
 
     /* 1 Stop bit */
-    obj->instance->CR2 &= ~(USART_CR2_STOP);
+    uart->CR2 &= ~(USART_CR2_STOP);
 
     /* oversampling by 16 */
-    obj->instance->CR1 &= ~(USART_CR1_OVER8);
+    uart->CR1 &= ~(USART_CR1_OVER8);
 }
 
-static void UartEnable(UART_Handle_t* const obj)
+static void UartEnable(USART_TypeDef* const uart)
 {
-    ASSERT(obj != NULL);
+    ASSERT(uart != NULL);
 
-    obj->instance->CR1 |= USART_CR1_UE;
+    uart->CR1 |= USART_CR1_UE;
 }
 
-static void TimerInit(UART_Handle_t* const obj, UART_NAMES uartName, uint32_t timeoutMs)
+/* Gpio operations */
+static const UartOps_t m_UartOps = {
+    .open = &UartInit,
+    .write = &UartWriteNoneBlocking,
+    .interrupt = &UartSetIntrerrupt
+};
+
+const UartOps_t* UartGetOps(void)
 {
-    ASSERT(obj != NULL);
-
-    switch (uartName)
-    {
-        case UART_1:
-            TIM_2_CLOCK_ENABLE;
-            break;
-
-        case UART_2:
-            TIM_3_CLOCK_ENABLE;
-            break;
-
-        case UART_6:
-            TIM_4_CLOCK_ENABLE;
-            break;
-
-        default:
-            break;
-    }
-
-    obj->timer->CR1 = 0;
-
-    /* Prescaler value 16 Mhz / 16 = 1 khz (1 ms) */
-    obj->timer->PSC = 16000 - 1;
-
-    /* Auto-reload value */
-    obj->timer->ARR = timeoutMs - 1;
-
-    obj->timer->EGR = TIM_EGR_UG;
-
-    /* One-pulse mode */
-    obj->timer->CR1 |= TIM_CR1_OPM;
-
-    /* Update interrupt enabled */
-    obj->timer->DIER |= TIM_DIER_UIE;
-
-    NVIC_EnableIRQ(TimerGetIrqType(obj));
-    NVIC_SetPriority(TimerGetIrqType(obj), 5);
-}
-
-static void TimerStart(UART_Handle_t* const obj)
-{
-    ASSERT(obj != NULL);
-
-    obj->timer->CR1 &= ~TIM_CR1_CEN;
-
-    obj->timer->SR &= ~TIM_SR_UIF;
-
-    obj->timer->CNT = 0;
-
-    /* Counter enabled */
-    obj->timer->CR1 |= TIM_CR1_CEN;
-}
-
-void TIM2_IRQHandler(void)
-{
-    UartRxTimeout(m_UartIrq[UART_1]);
-}
-
-void TIM3_IRQHandler(void)
-{
-    UartRxTimeout(m_UartIrq[UART_2]);
-}
-
-void TIM4_IRQHandler(void)
-{
-    UartRxTimeout(m_UartIrq[UART_6]);
+    return &m_UartOps;
 }
 
 #if 0
@@ -567,5 +501,4 @@ static void DMA_Config(UART_Handle_t* const obj, UART_NAMES uartName)
             break;
     }
 }
-#endif
 #endif
