@@ -4,19 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "stm32f411xe.h"
-
 #include "buffer.h"
 #include "gpio.h"
+#include "sw-timer.h"
 
 #define BUFFER_SIZE      1023
 
-/* USART baud rate supported */
-#if 0
-There might be an issue with writting data over UART on lower baudrate due to
-circular buffer might be flooded with data.
-Recommended baudrate: 921600.
-#endif
 typedef enum
 {
     BAUD_1200 = 0,
@@ -32,27 +25,19 @@ typedef enum
     BAUD_COUNT
 } BAUD_RATE;
 
-typedef enum
-{
-    UART_1 = 0,
-    UART_2,
-    UART_6,
-    UART_COUNT
-} UART_NAMES;
-
-typedef struct
-{
-    Gpio_t tx;
-    Gpio_t rx;
-} UART_GPIO_t;
-
 typedef void (*UART_EventHandler_t)(void* context);
 
+typedef struct UartOps UartOps_t;
+
 typedef struct
 {
-    USART_TypeDef* instance;
-    UART_NAMES uartName;
-    UART_GPIO_t gpio;
+    const UartOps_t* ops;
+    void* context;
+
+    void* base;
+    uint8_t uartNum;
+    GpioHandle_t txGpio;
+    GpioHandle_t rxGpio;
     Buffer_t txBuffer;
     Buffer_t rxBuffer;
     UART_EventHandler_t onRxDone;
@@ -60,36 +45,43 @@ typedef struct
     uint8_t rxData[BUFFER_SIZE + 1];
     volatile bool isTransmitting;
     volatile bool isTransmitCompeted;
-    TIM_TypeDef* timer;
+    SwTimer_t* timer;
     bool initialized;
 } UART_Handle_t;
 
-/*Brief: UART initialization
- * [in] - obj - pointer to UART handle
+struct UartOps
+{
+/*Brief: UART open
+ * [in] - handle - pointer to UART handle
+ * [in] - uartNum - uart name defined in bsp/<platform>/gpio-name.h
  * [in] - baud - baud rate
+ * [in] - swTimer - pointer to software timer
+ * [in] - rxTimeoutMs - receive timeout in ms
  * [out] - none
  * */
-void UartInit(UART_Handle_t* const obj, UART_NAMES uartName, BAUD_RATE baud);
+    void (*open)(UART_Handle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs);
 
-/*Brief: Send message over UART in non-blocking mode
- * [in] - obj - pointer to UART handle
+/*Brief: UART write in non-blocking mode
+ * [in] - handle - pointer to UART handle
  * [in] - buff - pointer to buffer
  * [in] - size - buffer size
  * [out] - none
  * */
-void UartWrite_IT(UART_Handle_t* const obj, const uint8_t* const buffer, uint8_t size);
+    void (*write)(UART_Handle_t* const handle, const uint8_t* const buffer, uint8_t size);
 
-/*Brief: Register receive callback
- * [in] - obj - pointer to UART handle
- * [in] - callback - callback
+/*Brief: UART IRQ initialization
+ * [in] - handle - pointer to UART handle
+ * [in] - handler - callback function pointer
+ * [in] - context - pointer to context
  * [out] - none
  * */
-void UartRegisterReceiveHandler(UART_Handle_t* const obj, UART_EventHandler_t callback);
+    void (*interrupt)(UART_Handle_t* const handle, UART_EventHandler_t handler, void* context);
+};
 
-/*Brief: Check if UART is in Idle state
- * [in] - obj - pointer to UART handle
- * [out] - true - idle (free); false - otherwise (busy)
- * */
-bool UartIdle(UART_Handle_t* const obj);
+/*Brief: Get UART operations
+* [in] - none
+* [out] - pointer to UART operations
+* */
+const UartOps_t* UartGetOps(void);
 
 #endif /* UART_H */
