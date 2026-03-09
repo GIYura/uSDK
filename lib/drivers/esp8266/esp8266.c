@@ -1,37 +1,32 @@
 #include <string.h>
 
+#include "custom-assert.h"
 #include "buffer.h"
 #include "esp8266.h"
-#include "uart.h"
 
 #define ESP_RESPONSE_MAX    128
 
-static UART_Handle_t m_uart;
-static uint8_t m_rxBuffer[ESP_RESPONSE_MAX];
-static ESP_ResponseHandler_t m_onEspResponse = NULL;
-
-static ESP_RESPONSE ESP_ParseResponse(const char* resp);
+static ESP_RESPONSE EspParseResponse(const char* resp);
 
 static void OnUartReceiveCompleted(void* context)
 {
-    UART_Handle_t* handle = (UART_Handle_t*)context;
-
-    uint16_t count = BufferCount(&handle->rxBuffer);
+    EspHandle_t* handle = (EspHandle_t*)context;
+    uint16_t count = BufferCount(&handle->uart->rxBuffer);
 
     if (count < ESP_RESPONSE_MAX)
     {
         for (uint16_t i = 0; i < count; i++)
         {
-            BufferGet(&handle->rxBuffer, &m_rxBuffer[i], sizeof(uint8_t));
+            BufferGet(&handle->uart->rxBuffer, &handle->rxBuffer[i], sizeof(uint8_t));
         }
 
-        m_rxBuffer[count] = '\0';
+        handle->rxBuffer[count] = '\0';
 
-        ESP_RESPONSE result = ESP_ParseResponse((char*)m_rxBuffer);
+        ESP_RESPONSE result = EspParseResponse((char*)handle->rxBuffer);
 
-        if (m_onEspResponse != NULL)
+        if (handle->handler != NULL)
         {
-            (*m_onEspResponse)(result);
+            (*handle->handler)(result);
         }
     }
     else
@@ -40,27 +35,7 @@ static void OnUartReceiveCompleted(void* context)
     }
 }
 
-void ESP_Init(void)
-{
-    UartInit(&m_uart, UART_1, BAUD_115200);
-
-    UartRegisterReceiveHandler(&m_uart, &OnUartReceiveCompleted);
-}
-
-void ESP_SendCommand(const char* const command)
-{
-    uint8_t commandLen = strlen(command);
-
-    UartWrite_IT(&m_uart, (uint8_t*)command, commandLen);
-    UartWrite_IT(&m_uart, (uint8_t*)"\r\n", 2);
-}
-
-void ESP_RegisterResponseHandler(ESP_ResponseHandler_t callback)
-{
-    m_onEspResponse = callback;
-}
-
-static ESP_RESPONSE ESP_ParseResponse(const char* resp)
+static ESP_RESPONSE EspParseResponse(const char* resp)
 {
     if (strstr(resp, "OK"))
     {
@@ -86,5 +61,34 @@ static ESP_RESPONSE ESP_ParseResponse(const char* resp)
     {
         return ESP_RESPONSE_UNKNOWN;
     }
+}
+
+void EspInit(EspHandle_t* const handle, UART_Handle_t* uart)
+{
+    ASSERT(handle);
+
+    handle->state = ESP_STATE_IDLE;
+    handle->handler = NULL;
+    handle->uart = uart;
+
+    handle->uart->ops->interrupt(handle->uart, &OnUartReceiveCompleted, handle);
+}
+
+void EspSendCommand(EspHandle_t* const handle, const char* const command)
+{
+    ASSERT(handle);
+    ASSERT(command);
+
+    uint8_t commandLen = strlen(command);
+
+    handle->uart->ops->write(handle->uart, (uint8_t*)command, commandLen);
+    handle->uart->ops->write(handle->uart, (uint8_t*)"\r\n", 2);
+}
+
+void EspRegisterResponseHandler(EspHandle_t* const handle, EspResponseHandler_t callback)
+{
+    ASSERT(handle);
+
+    handle->handler = callback;
 }
 

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "uart.h"
+
 typedef enum
 {
     ESP_RESPONSE_OK = 0,
@@ -13,25 +15,47 @@ typedef enum
     ESP_RESPONSE_UNKNOWN
 } ESP_RESPONSE;
 
-typedef void (*ESP_ResponseHandler_t)(ESP_RESPONSE result);
+typedef enum
+{
+    ESP_STATE_IDLE = 0,
+    ESP_STATE_AT_SENT,
+    ESP_STATE_GMR_SENT,
+    ESP_STATE_MODE_SENT,
+    ESP_STATE_APCFG_SENT,
+    ESP_STATE_ENABLE_CONN,
+    ESP_STATE_READY,
+} ESP_STATE;
+
+typedef void (*EspResponseHandler_t)(ESP_RESPONSE result);
+
+typedef struct
+{
+    ESP_STATE state;
+    UART_Handle_t* uart;
+    uint8_t rxBuffer[128];
+    EspResponseHandler_t handler;
+} EspHandle_t;
 
 /*Brief: ESP initialization
- * [in] - none
+ * [in] - handle - pointer to ESP object
+ * [in] - uart - pointer to UART object (transport layer)
  * [out] - none
  * */
-void ESP_Init(void);
+void EspInit(EspHandle_t* const handle, UART_Handle_t* uart);
 
 /*Brief: ESP send commands
+ * [in] - handle - pointer to ESP object
  * [in] - command - pointer to command
  * [out] - none
  * */
-void ESP_SendCommand(const char* const command);
+void EspSendCommand(EspHandle_t* const handle, const char* const command);
 
 /*Brief: ESP register response handler
+ * [in] - handle - pointer to ESP object
  * [in] - callback - callback
  * [out] - none
  * */
-void ESP_RegisterResponseHandler(ESP_ResponseHandler_t callback);
+void EspRegisterResponseHandler(EspHandle_t* const handle, EspResponseHandler_t callback);
 
 #endif /* ESP8266_H */
 
