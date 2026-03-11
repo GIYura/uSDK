@@ -138,7 +138,7 @@ static void OnRxTimeout(void* context)
     }
 }
 
-static void UartInit(UartHandle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs)
+static void UartInit(UartHandle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimerHandle_t* const swTimer, uint32_t rxTimeoutMs)
 {
     ASSERT(handle != NULL);
     ASSERT(swTimer != NULL);

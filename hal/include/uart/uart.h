@@ -45,7 +45,7 @@ typedef struct
     uint8_t rxData[BUFFER_SIZE + 1];
     volatile bool isTransmitting;
     volatile bool isTransmitCompleted;
-    SwTimer_t* timer;
+    SwTimerHandle_t* timer;
     bool initialized;
 } UartHandle_t;
 
@@ -59,7 +59,7 @@ struct UartOps
  * [in] - rxTimeoutMs - receive timeout in ms
  * [out] - none
  * */
-    void (*open)(UartHandle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs);
+    void (*open)(UartHandle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimerHandle_t* const swTimer, uint32_t rxTimeoutMs);
 
 /*Brief: UART write in non-blocking mode
  * [in] - handle - pointer to UART handle
