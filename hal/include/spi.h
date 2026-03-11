@@ -4,12 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "stm32f411xe.h"
+//#include "stm32f411xe.h"
 
 #include "gpio.h"
 #include "buffer.h"
 
-#define SPI_TRANSACTION_QUEUE_SIZE 31
+#define SPI_TRANSACTION_QUEUE_SIZE      (31)
 
 typedef enum
 {
@@ -19,6 +19,7 @@ typedef enum
     SPI_ERROR
 } SPI_RESULT;
 
+#if 0
 typedef enum
 {
     SPI_1 = 0,
@@ -28,6 +29,7 @@ typedef enum
     SPI_5,
     SPI_COUNT
 } SPI_NAMES;
+#endif
 
 typedef enum
 {
@@ -43,14 +45,16 @@ typedef enum
 
 typedef struct
 {
-    Gpio_t miso;
-    Gpio_t mosi;
-    Gpio_t sck;
-    Gpio_t nss;
-} SPI_Gpio_t;
+    GpioHandle_t miso;
+    GpioHandle_t mosi;
+    GpioHandle_t sck;
+    GpioHandle_t nss;
+} SpiGpio_t;
 
-typedef void (*SPI_EventHandler_t)(void* context);
-typedef void (*SPI_CsCallback_t)(void* context);
+typedef void (*SpiEventHandler_t)(void* context);
+typedef void (*SpiCsCallback_t)(void* context);
+
+typedef struct SpiOps SpiOps_t;
 
 typedef struct
 {
@@ -58,23 +62,41 @@ typedef struct
     uint8_t* rxBuffer;
     uint16_t txLen;
     uint16_t rxLen;
-    SPI_EventHandler_t onTransactionDone;
-    SPI_CsCallback_t preTransaction;
-    SPI_CsCallback_t postTransaction;
+    SpiEventHandler_t onTransactionDone;
+    SpiCsCallback_t preTransaction;
+    SpiCsCallback_t postTransaction;
     void* context;
-} SPI_Transaction_t;
+} SpiTransaction_t;
 
 typedef struct
 {
-    SPI_TypeDef* instance;
-    SPI_NAMES name;
-    SPI_Gpio_t gpio;
-    Buffer_t queue;
-    SPI_Transaction_t transactions[SPI_TRANSACTION_QUEUE_SIZE + 1];
-    SPI_Transaction_t* currentTransaction;
-    bool initialized;
-} SPI_Handle_t;
+    //SPI_TypeDef* instance;
 
+    const SpiOps_t* ops;
+    void* context;
+
+    void* base;
+    uint8_t name;
+    SpiGpio_t gpio;
+    Buffer_t queue;
+    SpiTransaction_t transactions[SPI_TRANSACTION_QUEUE_SIZE + 1];
+    SpiTransaction_t* currentTransaction;
+    bool initialized;
+} SpiHandle_t;
+
+struct SpiOps
+{
+    uint32_t (*open)(SpiHandle_t* const handle, uint8_t name, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t deriredFrequencyHz);
+    SPI_RESULT (*write)(SpiHandle_t* const handle, SpiTransaction_t* transaction);
+};
+
+/*Brief: Get SPI operations
+* [in] - none
+* [out] - pointer to SPI operations
+* */
+const SpiOps_t* SpiGetOps(void);
+
+#if 0
 /*Brief: SPI initialization
  * [in] - obj - pointer to SPI object
  * [in] - name - SPI name
@@ -109,5 +131,6 @@ bool SpiTransfer(SPI_Handle_t* const obj, const uint8_t* const txBuffer, uint8_t
  * [out] - spi transaction state
  * */
 SPI_RESULT SpiTransfer_IT(SPI_Handle_t* const obj, SPI_Transaction_t* transaction);
+#endif
 
 #endif /* SPI_H */
