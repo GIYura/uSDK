@@ -11,13 +11,13 @@
 static GpioHandle_t m_gpio1;
 #endif
 
-static void Button_OnGpioIrq(void* context)
+static void OnGpioIrq(void* context)
 {
 #if 0
     m_gpio1.ops->toggle(&m_gpio1);
 #endif
 
-    Button_t* button = (Button_t*)context;
+    ButtonHandle_t* button = (ButtonHandle_t*)context;
 
     if (button->debouncing)
     {
@@ -30,13 +30,13 @@ static void Button_OnGpioIrq(void* context)
     SwTimerStart(button->debounceTimer);
 }
 
-static void Button_OnDebounce(void* context)
+static void OnDebounce(void* context)
 {
 #if 0
     m_gpio1.ops->toggle(&m_gpio1);
 #endif
 
-    Button_t* button = (Button_t*)context;
+    ButtonHandle_t* button = (ButtonHandle_t*)context;
 
     button->debouncing = false;
 
@@ -51,7 +51,7 @@ static void Button_OnDebounce(void* context)
     }
 }
 
-void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, SwTimer_t* const swTimer, uint32_t debounceTicks)
+void ButtonInit(ButtonHandle_t* const button, GpioHandle_t* const gpio, SwTimer_t* const swTimer, uint32_t debounceTicks)
 {
     ASSERT(button != NULL);
     ASSERT(gpio != NULL);
@@ -63,10 +63,10 @@ void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, SwTimer_t* con
     button->debouncing = false;
     button->handler = NULL;
 
-    button->gpio->ops->interrupt(button->gpio, PIN_IRQ_FALLING, 0, &Button_OnGpioIrq, button);
+    button->gpio->ops->interrupt(button->gpio, PIN_IRQ_FALLING, 0, &OnGpioIrq, button);
 
     SwTimerInit(swTimer, debounceTicks, SW_TIMER_ONE_SHOT);
-    SwTimerRegisterCallback(swTimer, &Button_OnDebounce, button);
+    SwTimerRegisterCallback(swTimer, &OnDebounce, button);
 
 #if 0
     const GpioOps_t* gpioOps = GpioGetOps();
@@ -75,14 +75,14 @@ void ButtonInit(Button_t* const button, GpioHandle_t* const gpio, SwTimer_t* con
 #endif
 }
 
-void ButtonDeinit(Button_t* const button)
+void ButtonDeinit(ButtonHandle_t* const button)
 {
     ASSERT(button != NULL);
 
     button->gpio->ops->close(button->gpio);
 }
 
-void ButtonRegisterHandler(Button_t* const button, ButtonEventHandler callback)
+void ButtonRegisterHandler(ButtonHandle_t* const button, ButtonEventHandler callback)
 {
     ASSERT(button != NULL);
 
