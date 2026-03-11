@@ -31,7 +31,7 @@ typedef void (*EspResponseHandler_t)(ESP_RESPONSE result);
 typedef struct
 {
     ESP_STATE state;
-    UART_Handle_t* uart;
+    UartHandle_t* uart;
     uint8_t rxBuffer[128];
     EspResponseHandler_t handler;
 } EspHandle_t;
@@ -41,7 +41,7 @@ typedef struct
  * [in] - uart - pointer to UART object (transport layer)
  * [out] - none
  * */
-void EspInit(EspHandle_t* const handle, UART_Handle_t* uart);
+void EspInit(EspHandle_t* const handle, UartHandle_t* uart);
 
 /*Brief: ESP send commands
  * [in] - handle - pointer to ESP object

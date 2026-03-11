@@ -63,7 +63,7 @@ static ESP_RESPONSE EspParseResponse(const char* resp)
     }
 }
 
-void EspInit(EspHandle_t* const handle, UART_Handle_t* uart)
+void EspInit(EspHandle_t* const handle, UartHandle_t* uart)
 {
     ASSERT(handle);
     ASSERT(uart);

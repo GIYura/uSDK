@@ -25,7 +25,7 @@ typedef enum
     BAUD_COUNT
 } BAUD_RATE;
 
-typedef void (*UART_EventHandler_t)(void* context);
+typedef void (*UartEventHandler_t)(void* context);
 
 typedef struct UartOps UartOps_t;
 
@@ -40,26 +40,26 @@ typedef struct
     GpioHandle_t rxGpio;
     Buffer_t txBuffer;
     Buffer_t rxBuffer;
-    UART_EventHandler_t onRxDone;
+    UartEventHandler_t onRxDone;
     uint8_t txData[BUFFER_SIZE + 1];
     uint8_t rxData[BUFFER_SIZE + 1];
     volatile bool isTransmitting;
-    volatile bool isTransmitCompeted;
+    volatile bool isTransmitCompleted;
     SwTimer_t* timer;
     bool initialized;
-} UART_Handle_t;
+} UartHandle_t;
 
 struct UartOps
 {
 /*Brief: UART open
  * [in] - handle - pointer to UART handle
- * [in] - uartNum - uart name defined in bsp/<platform>/uart-name.h
+ * [in] - uartNum - platform-specific UART number
  * [in] - baud - baud rate
  * [in] - swTimer - pointer to software timer
  * [in] - rxTimeoutMs - receive timeout in ms
  * [out] - none
  * */
-    void (*open)(UART_Handle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs);
+    void (*open)(UartHandle_t* const handle, uint8_t uartNum, BAUD_RATE baud, SwTimer_t* const swTimer, uint32_t rxTimeoutMs);
 
 /*Brief: UART write in non-blocking mode
  * [in] - handle - pointer to UART handle
@@ -67,7 +67,7 @@ struct UartOps
  * [in] - size - buffer size
  * [out] - none
  * */
-    void (*write)(UART_Handle_t* const handle, const uint8_t* const buffer, uint8_t size);
+    void (*write)(UartHandle_t* const handle, const uint8_t* const buffer, uint8_t size);
 
 /*Brief: UART IRQ initialization
  * [in] - handle - pointer to UART handle
@@ -75,7 +75,7 @@ struct UartOps
  * [in] - context - pointer to context
  * [out] - none
  * */
-    void (*interrupt)(UART_Handle_t* const handle, UART_EventHandler_t handler, void* context);
+    void (*interrupt)(UartHandle_t* const handle, UartEventHandler_t handler, void* context);
 };
 
 /*Brief: Get UART operations
