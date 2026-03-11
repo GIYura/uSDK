@@ -5,9 +5,9 @@
 
 #define SW_TIMER_MAX   16
 
-static SwTimer_t* m_swTimers[SW_TIMER_MAX] = { NULL };
+static SwTimerHandle_t* m_swTimers[SW_TIMER_MAX] = { NULL };
 
-void SwTimerInit(SwTimer_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode)
+void SwTimerInit(SwTimerHandle_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode)
 {
     ASSERT(swTimer != NULL);
 
@@ -31,7 +31,7 @@ void SwTimerInit(SwTimer_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES
     ASSERT(false);
 }
 
-void SwTimerStart(SwTimer_t* const swTimer)
+void SwTimerStart(SwTimerHandle_t* const swTimer)
 {
     ASSERT(swTimer != NULL);
 
@@ -39,14 +39,14 @@ void SwTimerStart(SwTimer_t* const swTimer)
     swTimer->active = true;
 }
 
-void SwTimerStop(SwTimer_t* const swTimer)
+void SwTimerStop(SwTimerHandle_t* const swTimer)
 {
     ASSERT(swTimer != NULL);
 
     swTimer->active = false;
 }
 
-void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback, void* context)
+void SwTimerRegisterCallback(SwTimerHandle_t* const swTimer, SwTimerHandler_t callback, void* context)
 {
     ASSERT(swTimer != NULL);
 
@@ -58,7 +58,7 @@ void SwTimerTick(void)
 {
     for (uint8_t i = 0; i < SW_TIMER_MAX; i++)
     {
-        SwTimer_t* timer = m_swTimers[i];
+        SwTimerHandle_t* timer = m_swTimers[i];
 
         if (!timer || !timer->active)
         {

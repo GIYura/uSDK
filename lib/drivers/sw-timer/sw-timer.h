@@ -19,7 +19,7 @@ typedef struct
     bool active;
     SwTimerHandler_t callback;
     void* context;
-} SwTimer_t;
+} SwTimerHandle_t;
 
 /*Brief: SW Timer initialization
 * [in] - swTimer - pointer to SW timer object
@@ -27,26 +27,26 @@ typedef struct
 * [in] - mode - 0 - one shot; 1 - periodic
 * [out] - none
 * */
-void SwTimerInit(SwTimer_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode);
+void SwTimerInit(SwTimerHandle_t* const swTimer, uint32_t timeoutTicks, SW_TIMER_MODES mode);
 
 /*Brief: SW Timer start
 * [in] - swTimer - pointer to SW timer object
 * [out] - none
 * */
-void SwTimerStart(SwTimer_t* const swTimer);
+void SwTimerStart(SwTimerHandle_t* const swTimer);
 
 /*Brief: SW Timer stop
 * [in] - swTimer - pointer to SW timer object
 * [out] - none
 * */
-void SwTimerStop(SwTimer_t* const swTimer);
+void SwTimerStop(SwTimerHandle_t* const swTimer);
 
 /*Brief: Register SW Timer callback
 * [in] - swTimer - pointer to SW timer object
 * [in] - callback - SW timer callback
 * [out] - none
 * */
-void SwTimerRegisterCallback(SwTimer_t* const swTimer, SwTimerHandler_t callback, void* context);
+void SwTimerRegisterCallback(SwTimerHandle_t* const swTimer, SwTimerHandler_t callback, void* context);
 
 /*Brief: Update active SW Timers
 * [in] - none
