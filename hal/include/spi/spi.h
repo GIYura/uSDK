@@ -86,7 +86,7 @@ typedef struct
 
 struct SpiOps
 {
-    uint32_t (*open)(SpiHandle_t* const handle, uint8_t name, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t deriredFrequencyHz);
+    uint32_t (*open)(SpiHandle_t* const handle, uint8_t name, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t desiredFrequencyHz);
     SPI_RESULT (*write)(SpiHandle_t* const handle, SpiTransaction_t* transaction);
 };
 

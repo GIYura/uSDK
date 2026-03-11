@@ -1,18 +1,16 @@
 #include <stddef.h>
-#if 0
+#if 1
 
 #include "stm32f411xe.h"
 
 #include "custom-assert.h"
-#include "delay.h"
 #include "spi.h"
 #include "ignore.h"
 
+#include "spi-name.h"
 #include "gpio-name.h"
 
 //#define WAIT_FLAG_TIMEOUT_MAX   100 /* us */
-
-#define SPI_PORT_MAX           (5)
 
 #define SPI_1_CLOCK_ENABLE      (RCC->APB2ENR |= (RCC_APB2ENR_SPI1EN))
 #define SPI_2_CLOCK_ENABLE      (RCC->APB1ENR |= (RCC_APB1ENR_SPI2EN))
@@ -26,11 +24,11 @@ static void SpiMode(SPI_TypeDef* const spi, SPI_POLARITY polarity, SPI_PHASE pha
 static void SpiFormat(SPI_TypeDef* const spi);
 
 /*Brief: SPI speed
- * [in] - obj - pointer to SPI object
- * [in] - deriredFrequencyHz - desired SPI frequency in Hz
+ * [in] - handle - pointer to SPI object
+ * [in] - desiredFrequencyHz - desired SPI frequency in Hz
  * [out] - uint32_t value - actual SPI frequency in Hz
  * */
-static uint32_t SpiSpeed(SpiHandle_t* const handle, uint32_t deriredFrequencyHz);
+static uint32_t SpiSpeed(SpiHandle_t* const handle, uint32_t desiredFrequencyHz);
 static void SpiClockEnable(SpiHandle_t* const handle);
 static void SpiEnable(SPI_TypeDef* const spi);
 static void SpiDisable(SPI_TypeDef* const spi);
@@ -42,33 +40,33 @@ static void SpiDisableRxInterrupt(SPI_TypeDef* const spi);
 
 //static bool WaitFlagTimeout(volatile uint32_t* reg, uint32_t flag, bool state, uint32_t timeoutUs);
 
-static void SpiClearOverrun(SPI_TypeDef* const spi);
+static void SpiClearOverrun(const SPI_TypeDef* const spi);
 
 static void SpiIrqHandler(SpiHandle_t* const handle);
 
 static IRQn_Type GetIrqType(const SpiHandle_t* const handle);
 
-static SpiHandle_t* m_spiIrq[SPI_PORT_MAX];
+static SpiHandle_t* m_spiIrq[SPI_COUNT] = { NULL };
 
 static SPI_TypeDef* SpiGeBaseAddress(uint8_t spiNum)
 {
-    ASSERT(spiNum < SPI_PORT_MAX);
+    ASSERT(spiNum < SPI_COUNT);
 
-    if (spiNum == 0) return SPI1;
-    if (spiNum == 1) return SPI2;
-    if (spiNum == 2) return SPI3;
-    if (spiNum == 3) return SPI4;
-    if (spiNum == 4) return SPI5;
+    if (spiNum == SPI_1) return SPI1;
+    if (spiNum == SPI_2) return SPI2;
+    if (spiNum == SPI_3) return SPI3;
+    if (spiNum == SPI_4) return SPI4;
+    if (spiNum == SPI_5) return SPI5;
 
     /* should never reach here */
     return NULL;
 }
 
-static uint32_t SpiInit(SpiHandle_t* const handle, uint8_t spiNum, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t deriredFrequencyHz)
+static uint32_t SpiInit(SpiHandle_t* const handle, uint8_t spiNum, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t desiredFrequencyHz)
 {
     ASSERT(handle != NULL);
-    ASSERT(deriredFrequencyHz != 0);
-    ASSERT(spiNum < SPI_PORT_MAX);
+    ASSERT(desiredFrequencyHz != 0);
+    ASSERT(spiNum < SPI_COUNT);
 
     uint32_t actualFreq = 0;
 
@@ -80,33 +78,33 @@ static uint32_t SpiInit(SpiHandle_t* const handle, uint8_t spiNum, SPI_POLARITY 
 
     switch (spiNum)
     {
-        case 0:
+        case SPI_1:
             SpiGpioInit(handle, PA_6, PA_7, PA_5);
-            m_spiIrq[0] = handle;
+            m_spiIrq[SPI_1] = handle;
 
             break;
 
-        case 1:
+        case SPI_2:
             SpiGpioInit(handle, PB_14, PB_15, PB_13);
-            m_spiIrq[1] = handle;
+            m_spiIrq[SPI_2] = handle;
 
             break;
 
-        case 2:
+        case SPI_3:
             SpiGpioInit(handle, PB_4, PB_5, PB_3);
-            m_spiIrq[2] = handle;
+            m_spiIrq[SPI_3] = handle;
 
             break;
 
-        case 3:
+        case SPI_4:
             SpiGpioInit(handle, PE_5, PE_6, PE_4);
-            m_spiIrq[3] = handle;
+            m_spiIrq[SPI_4] = handle;
 
             break;
 
-        case 4:
+        case SPI_5:
             SpiGpioInit(handle, PE_13, PE_14, PE_12);
-            m_spiIrq[4] = handle;
+            m_spiIrq[SPI_5] = handle;
 
             break;
 
@@ -121,7 +119,7 @@ static uint32_t SpiInit(SpiHandle_t* const handle, uint8_t spiNum, SPI_POLARITY 
 
     SpiFormat(spi);
 
-    actualFreq = SpiSpeed(handle, deriredFrequencyHz);
+    actualFreq = SpiSpeed(handle, desiredFrequencyHz);
 
     SpiEnable(spi);
 
@@ -199,7 +197,7 @@ timeout:
 }
 #endif
 
-static SPI_RESULT SpiWriteNoneBlocking(SpiHandle_t* const handle, SpiTransaction_t* transaction)
+static SPI_RESULT SpiWriteAsync(SpiHandle_t* const handle, SpiTransaction_t* transaction)
 {
     ASSERT(handle != NULL);
     ASSERT(transaction != NULL);
@@ -233,7 +231,7 @@ static void SpiGpioInit(SpiHandle_t* const handle, uint8_t miso, uint8_t mosi, u
     handle->gpio.mosi.ops = ops;
     handle->gpio.sck.ops = ops;
 
-    if (handle->name == 2 || handle->name == 4)
+    if (handle->name == SPI_3 || handle->name == SPI_5)
     {
         handle->gpio.miso.ops->open(&handle->gpio.miso, miso, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_6);
         handle->gpio.miso.ops->open(&handle->gpio.mosi, mosi, PIN_MODE_ALTERNATE, PIN_TYPE_NO_PULL, PIN_STRENGTH_HIGH, PIN_CONFIG_PUSH_PULL, PIN_AF_6);
@@ -310,7 +308,7 @@ static uint32_t SpiSpeed(SpiHandle_t* const handle, uint32_t deriredFrequencyHz)
 
     SPI_TypeDef* spi = (SPI_TypeDef*)handle->base;
 
-    if (handle->name == 0 || handle->name == 3 || handle->name == 4)
+    if (handle->name == SPI_1 || handle->name == SPI_4 || handle->name == SPI_5)
     {
         /* APB2 */
         uint32_t hclk = SystemCoreClock;
@@ -361,19 +359,23 @@ static void SpiClockEnable(SpiHandle_t* const handle)
 
     switch (handle->name)
     {
-        case 0:
+        case SPI_1:
             SPI_1_CLOCK_ENABLE;
             break;
-        case 1:
+
+        case SPI_2:
             SPI_2_CLOCK_ENABLE;
             break;
-        case 2:
+
+        case SPI_3:
             SPI_3_CLOCK_ENABLE;
             break;
-        case 3:
+
+        case SPI_4:
             SPI_4_CLOCK_ENABLE;
             break;
-        case 4:
+
+        case SPI_5:
             SPI_5_CLOCK_ENABLE;
             break;
         default:
@@ -412,7 +414,7 @@ static bool WaitFlagTimeout(volatile uint32_t* reg, uint32_t flag, bool state, u
 }
 #endif
 
-static void SpiClearOverrun(SPI_TypeDef* const spi)
+static void SpiClearOverrun(const SPI_TypeDef* const spi)
 {
     ASSERT(spi != NULL);
 
@@ -506,23 +508,23 @@ static IRQn_Type GetIrqType(const SpiHandle_t* const handle)
 
     switch (handle->name)
     {
-        case 0:
+        case SPI_1:
             result = SPI1_IRQn;
             break;
 
-        case 1:
+        case SPI_2:
             result = SPI2_IRQn;
             break;
 
-        case 2:
+        case SPI_3:
             result = SPI3_IRQn;
             break;
 
-        case 3:
+        case SPI_4:
             result = SPI4_IRQn;
             break;
 
-        case 4:
+        case SPI_5:
             result = SPI5_IRQn;
             break;
 
@@ -538,65 +540,64 @@ static void SpiEnableTxInterrupt(SPI_TypeDef* const spi)
 {
     ASSERT(spi != NULL);
 
-    spi->CR2 |= SPI_CR2_TXEIE;
+    spi->CR2 |= (SPI_CR2_TXEIE);
 }
 
 static void SpiDisableTxInterrupt(SPI_TypeDef* const spi)
 {
     ASSERT(spi != NULL);
 
-    spi->CR2 &= ~SPI_CR2_TXEIE;
+    spi->CR2 &= ~(SPI_CR2_TXEIE);
 }
 
 static void SpiEnableRxInterrupt(SPI_TypeDef* const spi)
 {
     ASSERT(spi != NULL);
 
-    spi->CR2 |= SPI_CR2_RXNEIE;
+    spi->CR2 |= (SPI_CR2_RXNEIE);
 }
 
 static void SpiDisableRxInterrupt(SPI_TypeDef* const spi)
 {
     ASSERT(spi != NULL);
 
-    spi->CR2 &= ~SPI_CR2_RXNEIE;
+    spi->CR2 &= ~(SPI_CR2_RXNEIE);
 }
 
 void SPI1_IRQHandler(void)
 {
-    SpiIrqHandler(m_spiIrq[0]);
+    SpiIrqHandler(m_spiIrq[SPI_1]);
 }
 
 void SPI2_IRQHandler(void)
 {
-    SpiIrqHandler(m_spiIrq[1]);
+    SpiIrqHandler(m_spiIrq[SPI_2]);
 }
 
 void SPI3_IRQHandler(void)
 {
-    SpiIrqHandler(m_spiIrq[2]);
+    SpiIrqHandler(m_spiIrq[SPI_3]);
 }
 
 void SPI4_IRQHandler(void)
 {
-    SpiIrqHandler(m_spiIrq[3]);
+    SpiIrqHandler(m_spiIrq[SPI_4]);
 }
 
 void SPI5_IRQHandler(void)
 {
-    SpiIrqHandler(m_spiIrq[4]);
+    SpiIrqHandler(m_spiIrq[SPI_5]);
 }
 
 /* SPI operations */
-static const SpiOps_t m_SpiOps = {
+static const SpiOps_t m_spiOps = {
     .open = &SpiInit,
-    .write = &SpiWriteNoneBlocking,
+    .write = &SpiWriteAsync,
 };
 
 const SpiOps_t* SpiGetOps(void)
 {
-    return &m_SpiOps;
+    return &m_spiOps;
 }
-
 
 #endif
