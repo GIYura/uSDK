@@ -6,7 +6,7 @@
 typedef struct
 {
     GpioHandle_t* gpio;
-} Led_t;
+} LedHandle_t;
 
 /*Brief: LED initialization
 * [in] - led  - pointer to LED object
@@ -14,26 +14,30 @@ typedef struct
 * [in] - pin  - GPIO pin
 * [out] - none
 * */
-void LedInit(Led_t* const led, GpioHandle_t* const gpio, uint8_t pin);
+void LedInit(LedHandle_t* const led, GpioHandle_t* const gpio, uint8_t pin);
 
 /*Brief: LED ON
 * [in] - led  - pointer to LED object
 * [out] - none
 * */
-void LedOn(const Led_t* const led);
+void LedOn(const LedHandle_t* const led);
 
 /*Brief: LED OFF
 * [in] - led  - pointer to LED object
 * [out] - none
 * */
-void LedOff(const Led_t* const led);
+void LedOff(const LedHandle_t* const led);
 
 /*Brief: LED Toggle
 * [in] - led  - pointer to LED object
 * [out] - none
 * */
-void LedToggle(const Led_t* const led);
+void LedToggle(const LedHandle_t* const led);
 
-void LedDeinit(const Led_t* const led);
+/*Brief: LED de-init
+* [in] - led  - pointer to LED object
+* [out] - none
+* */
+void LedDeinit(const LedHandle_t* const led);
 
 #endif /* LED_H */
