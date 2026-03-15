@@ -32,5 +32,4 @@
 #define ADXL345_FIFO_CTL        0x38
 #define ADXL345_FIFO_STATUS     0x39
 
-
 #endif /* ADXL345_REGS_H */

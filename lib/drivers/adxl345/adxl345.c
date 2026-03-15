@@ -1,362 +1,287 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "assert.h"
+#include "custom-assert.h"
 #include "adxl345.h"
 #include "adxl345-regs.h"
-#include "spi.h"
 
-#include "i2c.h"
-#define ADXL345_I2C_ADDRESS     0x53
+#define ADXL345_SINGLE_REG_TRANSACTION_LEN  (2)
+#define ADXL345_VECOTR_TRANSACTION_LEN      (7)
 
-#define SPI_CLOCK_RATE  5000000     /* Hz */
+static void AdxlResgistersInit(AdxlHandle_t* const handle);
 
-/*TODO:*/
-#if 0
-AdxlInterface_t g_adxlSpiDriver = {
-        .init = &ADXL_Init,
-        .readRegisterAsync = &ADXL_ReadRegisterAsync,
-        .writeRegisterAsync = &ADXL_WriteRegisterAsync,
-};
-
-AdxlInterface_t g_adxlI2CDriver = {
-        .init = &ADXL_InitI2C,
-        .readRegisterAsync = &ADXL_ReadRegisterAsyncI2C,
-        .writeRegisterAsync = &ADXL_WriteRegisterAsyncI2C,
-};
-#endif
-
-typedef struct
+static void OnRegisterReadCompleted(void* context)
 {
-    SPI_Handle_t spi;
-    Gpio_t nss;
-} Adxl345_t;
+    ASSERT(context != NULL);
 
-typedef enum
-{
-    BUS_SPI = 0,
-    BUS_I2C,
-} BUS_TYPE;
+    AdxlHandle_t* handle = (AdxlHandle_t*)context;
 
-typedef struct
-{
-    uint8_t tx[7];
-    uint8_t rx[7];
-    uint8_t length;
-    BUS_TYPE bus;
-    ADXL_RequestHandler_t callback;
-    void* userContext;
-} AdxlRequest_t;
-
-static AdxlRequest_t m_adxlRequest;
-static Adxl345_t m_adxl345;
-static I2C_Handle_t m_i2c;
-
-static void AdxlCreateRequest(  AdxlRequest_t* req,
-                                BUS_TYPE bus,
-                                uint8_t* tx, uint8_t txLen,
-                                uint8_t* rx, uint8_t rxLen,
-                                ADXL_RequestHandler_t callback,
-                                void* context);
-
-static void Adxl345_Activate(void* context)
-{
-    GpioWrite(&m_adxl345.nss, 0);
-}
-
-static void Adxl345_Deactivate(void* context)
-{
-    GpioWrite(&m_adxl345.nss, 1);
-}
-
-static void OnRegisterRequestCompleted(void* context)
-{
-    Acceleration_t acceleration;
-    AdxlRequest_t* request = (AdxlRequest_t*)context;
-
-    switch (request->bus)
+    if (handle->rxLength == ADXL345_SINGLE_REG_TRANSACTION_LEN && handle->txLength == ADXL345_SINGLE_REG_TRANSACTION_LEN)
     {
-        case BUS_SPI:
-            if (request->length == 0)
-            {
-                if (request->callback)
-                {
-                    request->callback(NULL, request->userContext);
-                }
-            }
-
-            if (request->length == 2)
-            {
-                if (request->callback)
-                {
-                    request->callback(&request->rx[1], request->userContext);
-                }
-            }
-
-            if (request->length == 7)
-            {
-                if (request->callback)
-                {
-                    acceleration.x = (int16_t)(request->rx[2] << 8 | request->rx[1]);
-                    acceleration.y = (int16_t)(request->rx[4] << 8 | request->rx[3]);
-                    acceleration.z = (int16_t)(request->rx[6] << 8 | request->rx[5]);
-
-                    request->callback(&acceleration, request->userContext);
-                }
-            }
-            break;
-
-        case BUS_I2C:
-            if (request->length == 1)
-            {
-                if (request->callback)
-                {
-                    request->callback(&request->rx[0], request->userContext);
-                }
-            }
-
-            if (request->length == 6)
-            {
-                if (request->callback)
-                {
-                    acceleration.x = (int16_t)(request->rx[1] << 8 | request->rx[0]);
-                    acceleration.y = (int16_t)(request->rx[3] << 8 | request->rx[2]);
-                    acceleration.z = (int16_t)(request->rx[5] << 8 | request->rx[4]);
-
-                    request->callback(&acceleration, request->userContext);
-                }
-            }
-            break;
-        default:
-            ASSERT(false);
-            break;
-    }
-}
-
-static void I2C_OnRegisterWriteCompleted(void* context)
-{
-    AdxlRequest_t* request = (AdxlRequest_t*)context;
-
-    if (request->length == 0)
-    {
-        if (request->callback != NULL)
+        if (handle->readRegister != NULL)
         {
-            (*request->callback)(NULL, request->userContext);
+            (*handle->readRegister)(&handle->rxBuffer[1], handle->context);
         }
     }
-    else
-    {
-        I2C_Transaction_t i2cTransaction = {
-            .devAddress = ADXL345_I2C_ADDRESS,
-            .txBuffer = NULL,
-            .txLen = 0,
-            .rxBuffer = request->rx,
-            .rxLen = request->length,
-            .onTxDone = NULL,
-            .onRxDone = &OnRegisterRequestCompleted,
-            .context = request,
-        };
+}
 
-        I2C_MasterReceive_IT(&m_i2c, &i2cTransaction);
+static void OnRegisterWriteCompleted(void* context)
+{
+    ASSERT(context != NULL);
+
+    AdxlHandle_t* handle = (AdxlHandle_t*)context;
+
+    if (handle->rxLength == 0)
+    {
+        if (handle->writeRegister != NULL)
+        {
+            (*handle->writeRegister)(NULL, NULL);
+        }
     }
 }
 
-void ADXL_InitSPI(void)
+static void OnVectorReadCompleted(void* context)
 {
-    SpiInit(&m_adxl345.spi, SPI_1, CPOL_1, CPHA_1, SPI_CLOCK_RATE);
+    ASSERT(context != NULL);
 
-    /* chip select gpio */
-    GpioInit(&m_adxl345.nss, PA_0, PIN_MODE_OUTPUT, PIN_TYPE_NO_PULL_UP_PULL_DOWN, PIN_SPEED_FAST, PIN_CONFIG_PUSH_PULL, 1);
-}
+    Acceleration_t acceleration;
+    AdxlHandle_t* handle = (AdxlHandle_t*)context;
 
-void ADXL_ReadRegisterAsyncSPI(uint8_t address, ADXL_RequestHandler_t callback, void* context)
-{
-    uint8_t tx[2] = {0x80 | address, 0xFF};
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_SPI, tx, sizeof(tx), m_adxlRequest.rx, 2, callback, context);
-
-    SPI_Transaction_t spiTransaction = {
-        .txBuffer = m_adxlRequest.tx,
-        .rxBuffer = m_adxlRequest.rx,
-        .txLen = sizeof(tx),
-        .rxLen = m_adxlRequest.length,
-        .preTransaction = &Adxl345_Activate,
-        .postTransaction = &Adxl345_Deactivate,
-        .onTransactionDone = &OnRegisterRequestCompleted,
-        .context = &m_adxlRequest
-    };
-
-    SpiTransfer_IT(&m_adxl345.spi, &spiTransaction);
-}
-
-void ADXL_WriteRegisterAsyncSPI(uint8_t address, ADXL_RequestHandler_t callback, void* value)
-{
-    uint8_t tx[2];
-    tx[0] = 0x00 | address;
-    tx[1] = *(uint8_t*)value;
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_SPI, tx, sizeof(tx), m_adxlRequest.rx, 0, callback, NULL);
-
-    SPI_Transaction_t spiTransaction = {
-        .txBuffer = m_adxlRequest.tx,
-        .rxBuffer = NULL,
-        .txLen = sizeof(tx),
-        .rxLen = m_adxlRequest.length,
-        .preTransaction = &Adxl345_Activate,
-        .postTransaction = &Adxl345_Deactivate,
-        .onTransactionDone = &OnRegisterRequestCompleted,
-        .context = &m_adxlRequest
-    };
-
-    SpiTransfer_IT(&m_adxl345.spi, &spiTransaction);
-}
-
-void ADXL_ReadVectorAsyncSPI(uint8_t address, ADXL_RequestHandler_t callback, void* context)
-{
-    uint8_t tx[7];
-    memset(tx, 0xff, sizeof(tx));
-    tx[0] = 0x80 | 0x40 | address;
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_SPI, tx, sizeof(tx), m_adxlRequest.rx, 7, callback, context);
-
-    SPI_Transaction_t spiTransaction = {
-        .txBuffer = m_adxlRequest.tx,
-        .rxBuffer = m_adxlRequest.rx,
-        .txLen = sizeof(tx),
-        .rxLen = m_adxlRequest.length,
-        .preTransaction = &Adxl345_Activate,
-        .postTransaction = &Adxl345_Deactivate,
-        .onTransactionDone = OnRegisterRequestCompleted,
-        .context = &m_adxlRequest
-    };
-
-    SpiTransfer_IT(&m_adxl345.spi, &spiTransaction);
-}
-
-void ADXL_InitI2C(void)
-{
-#if 0
-    m_i2c.config.speed = I2C_SPEED_FAST_MODE;
-    m_i2c.config.dutyCycle = 1;
-    m_i2c.config.ackControl = 1;
-#else
-    m_i2c.config.speed = I2C_SPEED_STANDARD_MODE;
-    m_i2c.config.dutyCycle = 0;
-    m_i2c.config.ackControl = 1;
-#endif
-    I2C_Init(&m_i2c, I2C_1);
-}
-
-void ADXL_ReadRegisterAsyncI2C(uint8_t address, ADXL_RequestHandler_t callback, void* context)
-{
-    uint8_t tx[1] = { address };
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_I2C, tx, sizeof(tx), m_adxlRequest.rx, 1, callback, context);
-
-    I2C_Transaction_t i2cTransaction = {
-        .devAddress = ADXL345_I2C_ADDRESS,
-        .txBuffer = &m_adxlRequest.tx[0],
-        .txLen = sizeof(tx),
-        .rxBuffer = m_adxlRequest.rx,
-        .rxLen = m_adxlRequest.length,
-        .onTxDone = &I2C_OnRegisterWriteCompleted,
-        .onRxDone = NULL,
-        .context = &m_adxlRequest
-    };
-
-    I2C_MasterTransmit_IT(&m_i2c, &i2cTransaction);
-}
-
-void ADXL_WriteRegisterAsyncI2C(uint8_t address, ADXL_RequestHandler_t callback, void* value)
-{
-    uint8_t tx[2];
-    tx[0] = address;
-    tx[1] = *(uint8_t*)value;
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_I2C, tx, sizeof(tx), m_adxlRequest.rx, 0, callback, NULL);
-
-    I2C_Transaction_t i2cTransaction = {
-        .devAddress = ADXL345_I2C_ADDRESS,
-        .txBuffer = m_adxlRequest.tx,
-        .txLen = sizeof(tx),
-        .rxBuffer = NULL,
-        .rxLen = m_adxlRequest.length,
-        .onTxDone = &I2C_OnRegisterWriteCompleted,
-        .onRxDone = NULL,
-        .context = &m_adxlRequest
-    };
-
-    I2C_MasterTransmit_IT(&m_i2c, &i2cTransaction);
-}
-
-void ADXL_ReadVectorAsyncI2C(uint8_t address, ADXL_RequestHandler_t callback, void* context)
-{
-    uint8_t tx[1] = { address };
-
-    AdxlCreateRequest(&m_adxlRequest, BUS_I2C, tx, sizeof(tx), m_adxlRequest.rx, 6, callback, context);
-
-    I2C_Transaction_t i2cTransaction = {
-        .devAddress = ADXL345_I2C_ADDRESS,
-        .txBuffer = m_adxlRequest.tx,
-        .txLen = sizeof(uint8_t),
-        .rxBuffer = m_adxlRequest.rx,
-        .rxLen = m_adxlRequest.length,
-        .onTxDone = &I2C_OnRegisterWriteCompleted,
-        .onRxDone = NULL,
-        .context = &m_adxlRequest
-    };
-
-    I2C_MasterTransmit_IT(&m_i2c, &i2cTransaction);
-}
-
-static void AdxlCreateRequest(  AdxlRequest_t* req,
-                                BUS_TYPE bus,
-                                uint8_t* tx, uint8_t txLen,
-                                uint8_t* rx, uint8_t rxLen,
-                                ADXL_RequestHandler_t callback,
-                                void* context)
-{
-    ASSERT(req != NULL);
-    ASSERT(tx != NULL);
-    ASSERT(rx != NULL);
-    ASSERT(txLen <= sizeof(req->tx));
-
-    memset(req->tx, 0, sizeof(req->tx));
-    memset(req->rx, 0, sizeof(req->rx));
-
-    if (tx != NULL && txLen > 0)
+    if (handle->rxLength == ADXL345_VECOTR_TRANSACTION_LEN && handle->txLength == ADXL345_VECOTR_TRANSACTION_LEN)
     {
-        memcpy(req->tx, tx, txLen);
+        if (handle->readVector != NULL)
+        {
+            acceleration.x = (int16_t)(handle->rxBuffer[2] << 8 | handle->rxBuffer[1]);
+            acceleration.y = (int16_t)(handle->rxBuffer[4] << 8 | handle->rxBuffer[3]);
+            acceleration.z = (int16_t)(handle->rxBuffer[6] << 8 | handle->rxBuffer[5]);
+
+            (*handle->readVector)(&acceleration, handle->context);
+        }
+    }
+}
+
+static void AdxlActivate(void* context)
+{
+    ASSERT(context != NULL);
+
+    AdxlHandle_t* handle = (AdxlHandle_t*)context;
+
+    handle->nss->ops->write(handle->nss, 0);
+}
+
+static void AdxlDeactivate(void* context)
+{
+    ASSERT(context != NULL);
+
+    AdxlHandle_t* handle = (AdxlHandle_t*)context;
+
+    handle->nss->ops->write(handle->nss, 1);
+}
+
+void AdxlInitSpi(AdxlHandle_t* const handle, SpiHandle_t* const spi, GpioHandle_t* const nss)
+{
+    ASSERT(handle != NULL);
+    ASSERT(spi != NULL);
+    ASSERT(nss != NULL);
+    ASSERT(!handle->initialized);
+
+    handle->readRegister = NULL;
+    handle->readVector = NULL;
+    handle->writeRegister = NULL;
+    handle->spi = spi;
+    handle->nss = nss;
+
+    memset(handle->rxBuffer, 0, ADXL_TRANSACTION_LENGTH);
+    memset(handle->txBuffer, 0, ADXL_TRANSACTION_LENGTH);
+
+    handle->rxLength = 0;
+    handle->txLength = 0;
+
+    handle->initialized = true;
+
+    AdxlResgistersInit(handle);
+}
+
+void AdxlReadRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void* context)
+{
+    ASSERT(handle != NULL);
+    ASSERT(context != NULL);
+
+    if (!handle->initialized)
+    {
+        return;
     }
 
-    req->length = rxLen;
+    handle->context = context;
 
-    req->bus = bus;
+    handle->txBuffer[0] = 0x80 | address;
+    handle->txBuffer[1] = 0xFF;
+    handle->txLength = ADXL345_SINGLE_REG_TRANSACTION_LEN;
+    handle->rxLength = ADXL345_SINGLE_REG_TRANSACTION_LEN;
 
-    req->callback = callback;
-    req->userContext = context;
+    SpiTransaction_t spiTransaction = {
+        .txBuffer = handle->txBuffer,
+        .rxBuffer = handle->rxBuffer,
+        .txLen = handle->txLength,
+        .rxLen = handle->rxLength,
+        .preTransaction = &AdxlActivate,
+        .postTransaction = &AdxlDeactivate,
+        .onTransactionDone = &OnRegisterReadCompleted,
+        .context = handle,
+    };
+
+    handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
-/* TODO: */
-#if 0
-void AdxlInit(Adxl_t* dev, AdxlInterface_t* bus)
+void AdxlReadVectorAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void* context)
 {
-    dev->bus = bus;
+    ASSERT(handle != NULL);
+    ASSERT(context != NULL);
 
-    dev->bus->init();
+    if (!handle->initialized)
+    {
+        return;
+    }
+
+    handle->context = context;
+
+    memset(handle->txBuffer, 0xFF, ADXL345_VECOTR_TRANSACTION_LEN);
+    handle->txBuffer[0] = 0x80 | 0x40 | address;
+    handle->txLength = ADXL345_VECOTR_TRANSACTION_LEN;
+    handle->rxLength = ADXL345_VECOTR_TRANSACTION_LEN;
+
+    SpiTransaction_t spiTransaction = {
+        .txBuffer = handle->txBuffer,
+        .rxBuffer = handle->rxBuffer,
+        .txLen = handle->txLength,
+        .rxLen = handle->rxLength,
+        .preTransaction = &AdxlActivate,
+        .postTransaction = &AdxlDeactivate,
+        .onTransactionDone = OnVectorReadCompleted,
+        .context = handle,
+    };
+
+    handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
-void AdxlReadRegisterAsync(const Adxl_t* const dev, uint8_t address, ADXL_RequestHandler_t callback, void* context)
+void AdxlWriteRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void* value)
 {
-    ASSERT(dev != NULL);
+    ASSERT(handle != NULL);
+    ASSERT(value != NULL);
 
-    dev->bus->readRegisterAsync(address, callback, context);
+    if (!handle->initialized)
+    {
+        return;
+    }
+
+    handle->txBuffer[0] = 0x00 | address;
+    handle->txBuffer[1] = *(uint8_t*)value;
+    handle->txLength = ADXL345_SINGLE_REG_TRANSACTION_LEN;
+    handle->rxLength = 0;
+
+    SpiTransaction_t spiTransaction = {
+        .txBuffer = handle->txBuffer,
+        .rxBuffer = NULL,
+        .txLen = handle->txLength,
+        .rxLen = handle->rxLength,
+        .preTransaction = &AdxlActivate,
+        .postTransaction = &AdxlDeactivate,
+        .onTransactionDone = &OnRegisterWriteCompleted,
+        .context = handle,
+    };
+
+    handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
-void AdxlWriteRegisterAsync(const Adxl_t* const dev, uint8_t address, void* value)
+void AdxlRegisterReadRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
 {
-    ASSERT(dev != NULL);
+    ASSERT(handle != NULL);
 
-    dev->bus->writeRegisterAsync(address, value);
+    handle->readRegister = callback;
 }
-#endif
+
+void AdxlRegisterWriteRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
+{
+    ASSERT(handle != NULL);
+
+    handle->writeRegister = callback;
+}
+
+void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
+{
+    ASSERT(handle != NULL);
+
+    handle->readVector = callback;
+}
+
+static void AdxlResgistersInit(AdxlHandle_t* const handle)
+{
+    ASSERT(handle != NULL);
+
+    if (!handle->initialized)
+    {
+        return;
+    }
+
+    handle->registers[0].reg = ADXL345_DEVID;
+    handle->registers[0].value = ADXL345_ID;
+
+    handle->registers[1].reg = ADXL345_THRESH_TAP;
+    handle->registers[2].reg = ADXL345_OFSX;
+    handle->registers[3].reg = ADXL345_OFSY;
+    handle->registers[4].reg = ADXL345_OFSZ;
+    handle->registers[5].reg = ADXL345_DUR;
+    handle->registers[6].reg = ADXL345_LATENT;
+    handle->registers[7].reg = ADXL345_WINDOW;
+    handle->registers[8].reg = ADXL345_THRESH_ACT;
+    handle->registers[9].reg = ADXL345_THRESH_INACT;
+    handle->registers[10].reg = ADXL345_TIME_INACT;
+    handle->registers[11].reg = ADXL345_ACT_INACT_CTL;
+    handle->registers[12].reg = ADXL345_THRESH_FF;
+    handle->registers[13].reg = ADXL345_TIME_FF;
+    handle->registers[14].reg = ADXL345_TAP_AXES;
+    handle->registers[15].reg = ADXL345_ACT_TAP_STATUS;
+    handle->registers[16].reg = ADXL345_BW_RATE;
+    handle->registers[16].value = 0x0A;
+    handle->registers[17].reg = ADXL345_POWER_CTL;
+    handle->registers[18].reg = ADXL345_INT_ENABLE;
+    handle->registers[19].reg = ADXL345_INT_MAP;
+    handle->registers[20].reg = ADXL345_INT_SOURCE;
+    handle->registers[20].value = 0x02;
+    handle->registers[21].reg = ADXL345_DATA_FORMAT;
+    handle->registers[22].reg = ADXL345_DATAX0;
+    handle->registers[23].reg = ADXL345_DATAX1;
+    handle->registers[24].reg = ADXL345_DATAY0;
+    handle->registers[25].reg = ADXL345_DATAY1;
+    handle->registers[26].reg = ADXL345_DATAZ0;
+    handle->registers[27].reg = ADXL345_DATAZ1;
+    handle->registers[28].reg = ADXL345_FIFO_CTL;
+    handle->registers[29].reg = ADXL345_FIFO_STATUS;
+}
+
+AdxlRegisters_t* AdxlResgistersGet(AdxlHandle_t* const handle)
+{
+    ASSERT(handle != NULL);
+
+    return handle->registers;
+}
+
+bool AdxlCheckRegisters(const AdxlRegisters_t* const src, const AdxlRegisters_t* const dst)
+{
+    ASSERT(src != NULL);
+    ASSERT(dst != NULL);
+
+    for (uint8_t i = 0; i < ADXL_REGISTERS_COUNT; i++)
+    {
+        if (src[i].value == dst[i].value)
+        {
+            continue;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
