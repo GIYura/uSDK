@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//#include "stm32f411xe.h"
-
 #include "gpio.h"
 #include "buffer.h"
 
@@ -18,18 +16,6 @@ typedef enum
     SPI_QUEUE_FULL,
     SPI_ERROR
 } SPI_RESULT;
-
-#if 0
-typedef enum
-{
-    SPI_1 = 0,
-    SPI_2,
-    SPI_3,
-    SPI_4,
-    SPI_5,
-    SPI_COUNT
-} SPI_NAMES;
-#endif
 
 typedef enum
 {
@@ -70,8 +56,6 @@ typedef struct
 
 typedef struct
 {
-    //SPI_TypeDef* instance;
-
     const SpiOps_t* ops;
     void* context;
 
@@ -81,13 +65,14 @@ typedef struct
     Buffer_t queue;
     SpiTransaction_t transactions[SPI_TRANSACTION_QUEUE_SIZE + 1];
     SpiTransaction_t* currentTransaction;
+    SpiTransaction_t currentTransactionStorage;
     bool initialized;
 } SpiHandle_t;
 
 struct SpiOps
 {
     uint32_t (*open)(SpiHandle_t* const handle, uint8_t name, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t desiredFrequencyHz);
-    SPI_RESULT (*write)(SpiHandle_t* const handle, SpiTransaction_t* transaction);
+    SPI_RESULT (*transfer)(SpiHandle_t* const handle, const SpiTransaction_t* const transaction);
 };
 
 /*Brief: Get SPI operations
@@ -95,42 +80,5 @@ struct SpiOps
 * [out] - pointer to SPI operations
 * */
 const SpiOps_t* SpiGetOps(void);
-
-#if 0
-/*Brief: SPI initialization
- * [in] - obj - pointer to SPI object
- * [in] - name - SPI name
- * [in] - polarity - SPI clock polarity
- * [in] - phase - SPI clock phase
- * [in] - deriredFrequencyHz - SPI frequency in Hz
- * [out] - actual SPI frequency in Hz
- * */
-uint32_t SpiInit(SPI_Handle_t* const obj, SPI_NAMES name, SPI_POLARITY polarity, SPI_PHASE phase, uint32_t deriredFrequencyHz);
-
-/*Brief: SPI de-initialization
- * [in] - obj - pointer to SPI object
- * [out] - none
- * */
-void SpiDeinit(SPI_Handle_t* const obj);
-
-/*Brief: SPI transmit/receive in blocking mode
- * [in] - obj - pointer to SPI object
- * [in] - txBuffer - buffer to transmit
- * [in] - rxBuffer - buffer to receive
- * [in] - size - buffer size
- * [out] - true - transfer successful; false - otherwise
- * */
-bool SpiTransfer(SPI_Handle_t* const obj, const uint8_t* const txBuffer, uint8_t* const rxBuffer, uint8_t size);
-
-/*Brief: SPI transmit/receive in non-blocking mode
- * [in] - obj - pointer to SPI object
- * [in] - txBuffer - buffer to transmit
- * [in] - rxBuffer - buffer to receive
- * [in] - size - buffer size
- * [in] - context - pointer to context (storage for response)
- * [out] - spi transaction state
- * */
-SPI_RESULT SpiTransfer_IT(SPI_Handle_t* const obj, SPI_Transaction_t* transaction);
-#endif
 
 #endif /* SPI_H */
