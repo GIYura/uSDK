@@ -195,7 +195,7 @@ void AdxlWriteRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void
     handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
-void AdxlConfigureAsync(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback)
+void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback)
 {
     ASSERT(handle != NULL);
     ASSERT(sequence != NULL);

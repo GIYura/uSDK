@@ -104,6 +104,6 @@ void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t cal
  * [in] - callback - callback function on configure done
  * [out] - none
  * */
-void AdxlConfigureAsync(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback);
+void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback);
 
 #endif /* ADXL345_H */
