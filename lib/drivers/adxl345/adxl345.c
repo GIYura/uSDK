@@ -195,16 +195,15 @@ void AdxlWriteRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void
     handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
-void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback)
+void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const configSequence, uint8_t configSequenceSize)
 {
     ASSERT(handle != NULL);
-    ASSERT(sequence != NULL);
-    ASSERT(initSequenceSize > 0);
+    ASSERT(configSequence != NULL);
+    ASSERT(configSequenceSize > 0);
 
-    handle->initSequence = sequence;
-    handle->initCount = initSequenceSize;
+    handle->initSequence = configSequence;
+    handle->initCount = configSequenceSize;
     handle->initIndex = 0;
-    handle->onConfigDone = callback;
 
     AdxlWriteRegisterAsyncSpi(handle, handle->initSequence[handle->initIndex].reg, &handle->initSequence[handle->initIndex].value);
 }
@@ -228,4 +227,11 @@ void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t cal
     ASSERT(handle != NULL);
 
     handle->onReadVector = callback;
+}
+
+void AdxlRegisterConfigureHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
+{
+    ASSERT(handle != NULL);
+
+    handle->onConfigDone = callback;
 }

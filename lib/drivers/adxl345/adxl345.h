@@ -97,13 +97,19 @@ void AdxlRegisterWriteRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callb
  * */
 void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t callback);
 
-/*Brief: ADXL345 configure
+/*Brief: ADXL345 register configure handler
  * [in] - handle - pointer to ADXL345 handle
- * [in] - sequence - pointer to configure
- * [in] - initSequenceSize - configure sequence size
  * [in] - callback - callback function on configure done
  * [out] - none
  * */
-void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback);
+void AdxlRegisterConfigureHandler(AdxlHandle_t* const handle, AdxlHandler_t callback);
+
+/*Brief: ADXL345 configure
+ * [in] - handle - pointer to ADXL345 handle
+ * [in] - sequence - pointer to configure sequence
+ * [in] - initSequenceSize - configure sequence size
+ * [out] - none
+ * */
+void AdxlConfigureAsyncSpi(AdxlHandle_t* const handle, AdxlRegisters_t* const configSequence, uint8_t configSequenceSize);
 
 #endif /* ADXL345_H */
