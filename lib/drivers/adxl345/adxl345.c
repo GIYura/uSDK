@@ -8,8 +8,6 @@
 #define ADXL345_SINGLE_REG_TRANSACTION_LEN  (2)
 #define ADXL345_VECOTR_TRANSACTION_LEN      (7)
 
-static void AdxlResgistersInit(AdxlHandle_t* const handle);
-
 static void OnRegisterReadCompleted(void* context)
 {
     ASSERT(context != NULL);
@@ -18,9 +16,9 @@ static void OnRegisterReadCompleted(void* context)
 
     if (handle->rxLength == ADXL345_SINGLE_REG_TRANSACTION_LEN && handle->txLength == ADXL345_SINGLE_REG_TRANSACTION_LEN)
     {
-        if (handle->readRegister != NULL)
+        if (handle->onReadRegister != NULL)
         {
-            (*handle->readRegister)(&handle->rxBuffer[1], handle->context);
+            (*handle->onReadRegister)(&handle->rxBuffer[1], handle->context);
         }
     }
 }
@@ -31,11 +29,17 @@ static void OnRegisterWriteCompleted(void* context)
 
     AdxlHandle_t* handle = (AdxlHandle_t*)context;
 
-    if (handle->rxLength == 0)
+    handle->initIndex++;
+
+    if (handle->initIndex < handle->initCount)
     {
-        if (handle->writeRegister != NULL)
+        AdxlWriteRegisterAsyncSpi(handle, handle->initSequence[handle->initIndex].reg, &handle->initSequence[handle->initIndex].value);
+    }
+    else
+    {
+        if (handle->onConfigDone != NULL)
         {
-            (*handle->writeRegister)(NULL, NULL);
+            (*handle->onConfigDone)(NULL, handle->context);
         }
     }
 }
@@ -44,18 +48,18 @@ static void OnVectorReadCompleted(void* context)
 {
     ASSERT(context != NULL);
 
-    Acceleration_t acceleration;
+    AdxlAcceleration_t acceleration;
     AdxlHandle_t* handle = (AdxlHandle_t*)context;
 
     if (handle->rxLength == ADXL345_VECOTR_TRANSACTION_LEN && handle->txLength == ADXL345_VECOTR_TRANSACTION_LEN)
     {
-        if (handle->readVector != NULL)
+        if (handle->onReadVector != NULL)
         {
             acceleration.x = (int16_t)(handle->rxBuffer[2] << 8 | handle->rxBuffer[1]);
             acceleration.y = (int16_t)(handle->rxBuffer[4] << 8 | handle->rxBuffer[3]);
             acceleration.z = (int16_t)(handle->rxBuffer[6] << 8 | handle->rxBuffer[5]);
 
-            (*handle->readVector)(&acceleration, handle->context);
+            (*handle->onReadVector)(&acceleration, handle->context);
         }
     }
 }
@@ -85,9 +89,9 @@ void AdxlInitSpi(AdxlHandle_t* const handle, SpiHandle_t* const spi, GpioHandle_
     ASSERT(nss != NULL);
     ASSERT(!handle->initialized);
 
-    handle->readRegister = NULL;
-    handle->readVector = NULL;
-    handle->writeRegister = NULL;
+    handle->onReadRegister = NULL;
+    handle->onReadVector = NULL;
+    handle->onWriteRegister = NULL;
     handle->spi = spi;
     handle->nss = nss;
 
@@ -98,8 +102,6 @@ void AdxlInitSpi(AdxlHandle_t* const handle, SpiHandle_t* const spi, GpioHandle_
     handle->txLength = 0;
 
     handle->initialized = true;
-
-    AdxlResgistersInit(handle);
 }
 
 void AdxlReadRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void* context)
@@ -193,95 +195,37 @@ void AdxlWriteRegisterAsyncSpi(AdxlHandle_t* const handle, uint8_t address, void
     handle->spi->ops->transfer(handle->spi, &spiTransaction);
 }
 
+void AdxlConfigureAsync(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback)
+{
+    ASSERT(handle != NULL);
+    ASSERT(sequence != NULL);
+    ASSERT(initSequenceSize > 0);
+
+    handle->initSequence = sequence;
+    handle->initCount = initSequenceSize;
+    handle->initIndex = 0;
+    handle->onConfigDone = callback;
+
+    AdxlWriteRegisterAsyncSpi(handle, handle->initSequence[handle->initIndex].reg, &handle->initSequence[handle->initIndex].value);
+}
+
 void AdxlRegisterReadRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
 {
     ASSERT(handle != NULL);
 
-    handle->readRegister = callback;
+    handle->onReadRegister = callback;
 }
 
 void AdxlRegisterWriteRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
 {
     ASSERT(handle != NULL);
 
-    handle->writeRegister = callback;
+    handle->onWriteRegister = callback;
 }
 
 void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t callback)
 {
     ASSERT(handle != NULL);
 
-    handle->readVector = callback;
-}
-
-static void AdxlResgistersInit(AdxlHandle_t* const handle)
-{
-    ASSERT(handle != NULL);
-
-    if (!handle->initialized)
-    {
-        return;
-    }
-
-    handle->registers[0].reg = ADXL345_DEVID;
-    handle->registers[0].value = ADXL345_ID;
-
-    handle->registers[1].reg = ADXL345_THRESH_TAP;
-    handle->registers[2].reg = ADXL345_OFSX;
-    handle->registers[3].reg = ADXL345_OFSY;
-    handle->registers[4].reg = ADXL345_OFSZ;
-    handle->registers[5].reg = ADXL345_DUR;
-    handle->registers[6].reg = ADXL345_LATENT;
-    handle->registers[7].reg = ADXL345_WINDOW;
-    handle->registers[8].reg = ADXL345_THRESH_ACT;
-    handle->registers[9].reg = ADXL345_THRESH_INACT;
-    handle->registers[10].reg = ADXL345_TIME_INACT;
-    handle->registers[11].reg = ADXL345_ACT_INACT_CTL;
-    handle->registers[12].reg = ADXL345_THRESH_FF;
-    handle->registers[13].reg = ADXL345_TIME_FF;
-    handle->registers[14].reg = ADXL345_TAP_AXES;
-    handle->registers[15].reg = ADXL345_ACT_TAP_STATUS;
-    handle->registers[16].reg = ADXL345_BW_RATE;
-    handle->registers[16].value = 0x0A;
-    handle->registers[17].reg = ADXL345_POWER_CTL;
-    handle->registers[18].reg = ADXL345_INT_ENABLE;
-    handle->registers[19].reg = ADXL345_INT_MAP;
-    handle->registers[20].reg = ADXL345_INT_SOURCE;
-    handle->registers[20].value = 0x02;
-    handle->registers[21].reg = ADXL345_DATA_FORMAT;
-    handle->registers[22].reg = ADXL345_DATAX0;
-    handle->registers[23].reg = ADXL345_DATAX1;
-    handle->registers[24].reg = ADXL345_DATAY0;
-    handle->registers[25].reg = ADXL345_DATAY1;
-    handle->registers[26].reg = ADXL345_DATAZ0;
-    handle->registers[27].reg = ADXL345_DATAZ1;
-    handle->registers[28].reg = ADXL345_FIFO_CTL;
-    handle->registers[29].reg = ADXL345_FIFO_STATUS;
-}
-
-AdxlRegisters_t* AdxlResgistersGet(AdxlHandle_t* const handle)
-{
-    ASSERT(handle != NULL);
-
-    return handle->registers;
-}
-
-bool AdxlCheckRegisters(const AdxlRegisters_t* const src, const AdxlRegisters_t* const dst)
-{
-    ASSERT(src != NULL);
-    ASSERT(dst != NULL);
-
-    for (uint8_t i = 0; i < ADXL_REGISTERS_COUNT; i++)
-    {
-        if (src[i].value == dst[i].value)
-        {
-            continue;
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    return true;
+    handle->onReadVector = callback;
 }

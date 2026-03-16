@@ -10,8 +10,6 @@
 
 #define ADXL_TRANSACTION_LENGTH         (64)
 
-#define ADXL_REGISTERS_COUNT            (30)
-
 typedef void (*AdxlHandler_t)(void* value, void* context);
 
 typedef struct
@@ -25,7 +23,7 @@ typedef struct
     int16_t x;
     int16_t y;
     int16_t z;
-} Acceleration_t;
+} AdxlAcceleration_t;
 
 typedef struct
 {
@@ -35,11 +33,14 @@ typedef struct
     uint8_t rxBuffer[ADXL_TRANSACTION_LENGTH];
     uint8_t txLength;
     uint8_t rxLength;
-    AdxlHandler_t readRegister;
-    AdxlHandler_t writeRegister;
-    AdxlHandler_t readVector;
+    AdxlHandler_t onReadRegister;
+    AdxlHandler_t onWriteRegister;
+    AdxlHandler_t onReadVector;
     void* context;
-    AdxlRegisters_t registers[ADXL_REGISTERS_COUNT];
+    AdxlRegisters_t* initSequence;
+    uint8_t initCount;
+    uint8_t initIndex;
+    AdxlHandler_t onConfigDone;
     bool initialized;
 } AdxlHandle_t;
 
@@ -96,16 +97,13 @@ void AdxlRegisterWriteRegHandler(AdxlHandle_t* const handle, AdxlHandler_t callb
  * */
 void AdxlRegisterReadVectorHandler(AdxlHandle_t* const handle, AdxlHandler_t callback);
 
-#if 0
-/*
- * NOTE: for test only
- * Brief: Read all ADXL345 registers over SPI
- * [in] - src - pointer to default registers
- * [in] - dst - pointer to read registers
- * [out] - true - test ok; otherwise - test failed
+/*Brief: ADXL345 configure
+ * [in] - handle - pointer to ADXL345 handle
+ * [in] - sequence - pointer to configure
+ * [in] - initSequenceSize - configure sequence size
+ * [in] - callback - callback function on configure done
+ * [out] - none
  * */
-bool AdxlCheckRegisters(const AdxlRegisters_t* const src, const AdxlRegisters_t* const dst);
-AdxlRegisters_t* AdxlResgistersGet(AdxlHandle_t* const handle);
-#endif
+void AdxlConfigureAsync(AdxlHandle_t* const handle, AdxlRegisters_t* const sequence, uint8_t initSequenceSize, AdxlHandler_t callback);
 
 #endif /* ADXL345_H */
